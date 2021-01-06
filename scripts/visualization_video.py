@@ -51,7 +51,7 @@ dtype = 'complex64' # STFT data type
 
 ## IBM
 quantile_fraction_begin = 0.93
-quantile_fraction_end = 0.99
+quantile_fraction_end = 0.999
 quantile_weight = 0.999
 
 ## Video
