@@ -14,13 +14,13 @@ import concurrent.futures # for multiprocessing
 import soundfile as sf
 
 from packages.processing.stft import stft
+from packages.processing.target import noise_robust_clean_speech_VAD # because clean audio is very noisy
 from packages.visualization import display_wav_spectro_mask
 
 # Dataset
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
-    from packages.processing.target import noise_robust_clean_speech_VAD # because clean audio is very noisy
 
 
 # Settings
@@ -49,7 +49,7 @@ pad_mode = 'reflect'  # This argument is ignored if center = False
 pad_at_end = True  # pad audio file at end to match same size after stft + istft
 dtype = 'complex64' # STFT data type
 
-## IBM
+## Noise robust VAD
 quantile_fraction_begin = 0.93
 quantile_fraction_end = 0.999
 quantile_weight = 0.999
