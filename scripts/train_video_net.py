@@ -1,29 +1,62 @@
-import os
 import sys
+sys.path.append('.')
+
+import os
 import torch
 import pickle
 import numpy as np
 import torch.nn as nn
+from tqdm import tqdm
 
 from torch.utils.data import DataLoader
-from video_net import VideoClassifier
-from data_handling import VideoFrames
-from python.models.utils import binary_cross_entropy, binary_cross_entropy_2classes, f1_loss
-from python.utils import count_parameters
+# from video_net import VideoClassifier
+# from data_handling import VideoFrames
 
+from packages.data_handling import HDF5SequenceSpectrogramLabeledFrames
+from packages.models.Video_Net import DeepVAD_video
+from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2classes, f1_loss
+from packages.utils import count_parameters, my_collate
 
+# Dataset
+# dataset_size = 'subset'
+dataset_size = 'complete'
+
+dataset_name = 'ntcd_timit'
+data_dir = 'export'
+labels = 'vad_labels'
 
 # System 
 cuda = torch.cuda.is_available()
-device = torch.device("cuda" if cuda else "cpu")
+cuda_device = "cuda:0"
+device = torch.device(cuda_device if cuda else "cpu")
+num_workers = 16
+pin_memory = True
+non_blocking = True
+rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
+                           # Default is 1 Mb
+                           # Here we are using 400Mb of chunk_cache_mem here
+rdcc_nslots = 1e5 # The number of slots in the cache's hash table
+                  # Default is 521
+                  # ideally 100 x number of chunks that can be fit in rdcc_nbytes
+                  # (see https://docs.h5py.org/en/stable/high/file.html?highlight=rdcc#chunk-cache)
+eps = 1e-8
 
+# Deep Generative Model
+x_dim = 513 
+if labels == 'noisy_labels':
+    y_dim = 513
+if labels == 'noisy_vad_labels':
+    y_dim = 1
+# h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
-eps = 1e-8
-batch_size = 64
 seq_length = 15
+batch_norm=False
+std_norm =True
+
 
 # Training
+batch_size = 64
 learning_rate = 1e-4
 weight_decay = 1e-4
 momentum = 0.9
@@ -31,43 +64,71 @@ log_interval = 1
 start_epoch = 1
 end_epoch = 100
 
+if labels == 'noisy_vad_labels':
+    model_name = 'dummy_classif_VAD_qf0.999_normdataset_hdim_{:03d}_{:03d}_end_epoch_{:03d}'.format(h_dim[0], h_dim[1], end_epoch)
 
 model_name = 'Video_Classifier_end_epoch_{:03d}'.format(end_epoch)
 
+# print('Load data')
+# train_files = []
+# train_data_path = "data/complete/matlab_raw/train/"
+# speaker_folders_train = sorted(os.listdir(train_data_path))
+# for speaker_folder in speaker_folders_train:
+# 	video_folder_path = os.path.join(train_data_path, speaker_folder)
+# 	video_files = sorted([x for x in os.listdir(video_folder_path) if '.mat' in x])
+# 	for video_file in video_files:
+# 		train_files.append("train/{}/{}".format(speaker_folder, video_file[:-4]))
+
+# dataset_train = VideoFrames(train_files, seq_length)
+
+# valid_files = []
+# valid_data_path = "data/complete/matlab_raw/dev/"
+# speaker_folders_valid = sorted(os.listdir(valid_data_path))
+# for speaker_folder in speaker_folders_valid:
+# 	video_folder_path = os.path.join(valid_data_path, speaker_folder)
+# 	video_files = sorted([x for x in os.listdir(video_folder_path) if '.mat' in x])
+# 	for video_file in video_files:
+# 		valid_files.append("dev/{}/{}".format(speaker_folder, video_file[:-4]))
+
+# dataset_valid = VideoFrames(valid_files, seq_length)
+
+# train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, drop_last=True)
+# valid_loader = DataLoader(dataset_valid, batch_size=batch_size, shuffle=False, drop_last=True)
+
+
+#####################################################################################################
+
 print('Load data')
-train_files = []
-train_data_path = "data/complete/matlab_raw/train/"
-speaker_folders_train = sorted(os.listdir(train_data_path))
-for speaker_folder in speaker_folders_train:
-	video_folder_path = os.path.join(train_data_path, speaker_folder)
-	video_files = sorted([x for x in os.listdir(video_folder_path) if '.mat' in x])
-	for video_file in video_files:
-		train_files.append("train/{}/{}".format(speaker_folder, video_file[:-4]))
+output_h5_dir = os.path.join('data', dataset_size, data_dir, dataset_name + '_' + labels + '.h5')
 
-dataset_train = VideoFrames(train_files, seq_length)
+train_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
+                                                     dataset_type='train',
+                                                     rdcc_nbytes=rdcc_nbytes,
+                                                     rdcc_nslots=rdcc_nslots,
+                                                     seq_length=seq_length)
+valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
+                                                     dataset_type='validation',
+                                                     rdcc_nbytes=rdcc_nbytes,
+                                                     rdcc_nslots=rdcc_nslots,
+                                                     seq_length=seq_length)
 
-valid_files = []
-valid_data_path = "data/complete/matlab_raw/dev/"
-speaker_folders_valid = sorted(os.listdir(valid_data_path))
-for speaker_folder in speaker_folders_valid:
-	video_folder_path = os.path.join(valid_data_path, speaker_folder)
-	video_files = sorted([x for x in os.listdir(video_folder_path) if '.mat' in x])
-	for video_file in video_files:
-		valid_files.append("dev/{}/{}".format(speaker_folder, video_file[:-4]))
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
 
-dataset_valid = VideoFrames(valid_files, seq_length)
+print('- Number of training samples: {}'.format(len(train_dataset)))
+print('- Number of validation samples: {}'.format(len(valid_dataset)))
 
-train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, drop_last=True)
-valid_loader = DataLoader(dataset_valid, batch_size=batch_size, shuffle=False, drop_last=True)
-
-
-print('- Number of training samples: {}'.format(len(dataset_train)))
-print('- Number of validation samples: {}'.format(len(dataset_valid)))
-
+print('- Number of training batches: {}'.format(len(train_loader)))
+print('- Number of validation batches: {}'.format(len(valid_loader)))
 
 def main():
     print('Create model')
-    model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
+    # model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
+    model = DeepVAD_video(lstm_layers, lstm_hidden_size, batch_size)
 
     if cuda: model = model.to(device)
 
@@ -94,13 +155,18 @@ def main():
     for epoch in range(start_epoch, end_epoch):
         model.train()
         total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
-        for batch_idx, (x, y) in enumerate(train_loader):
+        # for batch_idx, (x, y) in enumerate(train_loader):
+        for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
             if cuda:
-                x, y = x.to(device), y.long().to(device)
+                # x, y = x.to(device), y.long().to(device)
+                x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
 
-            y_hat_soft = model(x)
+            y_hat_soft = model(x, lengths)
 
+            #TODO: normalize
+            
             # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
+            y = torch.squeeze(y)
             loss = criterion(y_hat_soft, y)
 
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
@@ -143,13 +209,18 @@ def main():
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
 
             total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
-
-            for batch_idx, (x, y) in enumerate(valid_loader):
+            
+            # for batch_idx, (x, y) in enumerate(valid_loader):
+            for batch_idx, (lengths, x, y) in tqdm(enumerate(valid_loader)):
 
                 if cuda:
-                    x, y = x.to(device), y.long().to(device)
+                    # x, y = x.to(device), y.long().to(device)
+                    x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
 
-                y_hat_soft = model(x)
+                # y_hat_soft = model(x)
+                y_hat_soft = model(x, lengths)
+                
+                y = torch.squeeze(y)
                 loss = criterion(y_hat_soft, y)
 
                 total_loss += loss.item()
