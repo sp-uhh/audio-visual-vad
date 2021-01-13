@@ -7,6 +7,7 @@ import pickle
 import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
+import h5py as h5
 
 from torch.utils.data import DataLoader
 # from video_net import VideoClassifier
@@ -58,16 +59,14 @@ std_norm =True
 # Training
 batch_size = 64
 learning_rate = 1e-4
-weight_decay = 1e-4
-momentum = 0.9
+# weight_decay = 1e-4
+# momentum = 0.9
 log_interval = 1
 start_epoch = 1
 end_epoch = 100
 
-if labels == 'noisy_vad_labels':
-    model_name = 'dummy_classif_VAD_qf0.999_normdataset_hdim_{:03d}_{:03d}_end_epoch_{:03d}'.format(h_dim[0], h_dim[1], end_epoch)
-
-model_name = 'Video_Classifier_end_epoch_{:03d}'.format(end_epoch)
+if labels == 'vad_labels':
+    model_name = 'Video_Classifier_normdataset_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []
@@ -137,6 +136,22 @@ def main():
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
+    if std_norm:
+        print('Load mean and std')
+        # Normalize train_data, valid_data
+        # mean = np.mean(np.power(abs(train_data), 2), axis=1)[:, None]
+        # std = np.std(np.power(abs(train_data), 2), axis=1, ddof=1)[:, None]
+        with h5.File(output_h5_dir, 'r') as file:
+            mean = file['X_train_mean'][:]
+            std = file['X_train_std'][:]
+
+        # Save mean and std
+        np.save(model_dir + '/' + 'trainset_mean.npy', mean)
+        np.save(model_dir + '/' + 'trainset_std.npy', std)
+
+    mean = torch.tensor(mean).to(device)
+    std = torch.tensor(std).to(device)
+
     # Start log file
     file = open(model_dir + '/' +'output_batch.log','w') 
     file = open(model_dir + '/' +'output_epoch.log','w') 
@@ -161,10 +176,15 @@ def main():
                 # x, y = x.to(device), y.long().to(device)
                 x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
 
-            y_hat_soft = model(x, lengths)
+            # Normalize power spectrogram
+            if std_norm:
+                x_norm = x - mean.T
+                x_norm /= (std + eps).T
 
-            #TODO: normalize
-            
+                y_hat_soft = model(x_norm, lengths) 
+            else:
+                y_hat_soft = model(x, lengths)
+
             # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
             y = torch.squeeze(y)
             loss = criterion(y_hat_soft, y)
@@ -218,7 +238,14 @@ def main():
                     x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
 
                 # y_hat_soft = model(x)
-                y_hat_soft = model(x, lengths)
+                # Normalize power spectrogram
+                if std_norm:
+                    x_norm = x - mean.T
+                    x_norm /= (std + eps).T
+
+                    y_hat_soft = model(x_norm, lengths) 
+                else:
+                    y_hat_soft = model(x, lengths)
                 
                 y = torch.squeeze(y)
                 loss = criterion(y_hat_soft, y)
