@@ -10,6 +10,8 @@ from tqdm import tqdm
 import h5py as h5
 
 from torch.utils.data import DataLoader
+import torch.multiprocessing as mp
+import torch.distributed as dist
 # from video_net import VideoClassifier
 # from data_handling import VideoFrames
 
@@ -68,6 +70,10 @@ end_epoch = 100
 if labels == 'vad_labels':
     model_name = 'Video_Classifier_normdataset_end_epoch_{:03d}'.format(end_epoch)
 
+# GPU Multiprocessing
+nb_devices = torch.cuda.device_count()
+gpu_list = np.arange(nb_devices)
+
 # print('Load data')
 # train_files = []
 # train_data_path = "data/complete/matlab_raw/train/"
@@ -124,12 +130,29 @@ print('- Number of validation samples: {}'.format(len(valid_dataset)))
 print('- Number of training batches: {}'.format(len(train_loader)))
 print('- Number of validation batches: {}'.format(len(valid_loader)))
 
-def main():
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+
+    # initialize the process group
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+
+def cleanup():
+    dist.destroy_process_group()
+
+def main(device, world_size):
+    print(f"Running DDP on rank {device}.")
+    setup(device, world_size)
+
     print('Create model')
     # model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
     model = DeepVAD_video(lstm_layers, lstm_hidden_size, batch_size)
 
     if cuda: model = model.to(device)
+
+    # Multi-GPU training
+    # model = torch.nn.DataParallel(model, device_ids=gpu_list)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device])
 
     # Create model folder
     model_dir = os.path.join('models', model_name)
@@ -272,6 +295,20 @@ def main():
             # Save model
             torch.save(model.state_dict(), model_dir + '/' + 'Video_Net_epoch_{:03d}_vloss_{:.2f}.pt'.format(
                 epoch, total_loss / m))
+    
+    # Distribued Data Parallel
+    cleanup()
+
+def run_demo(fn, world_size):
+    mp.spawn(
+        fn,
+        # args, #= (args[0], args[1], args[2], args[3], args[4]),
+        args = (world_size,),
+        nprocs = world_size, # Also tried 2 , but no difference
+        join = True
+    )
 
 if __name__ == '__main__':
-    main()
+    # main()
+    run_demo(main, nb_devices)
+    
