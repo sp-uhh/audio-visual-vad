@@ -30,7 +30,7 @@ labels = 'vad_labels'
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 16
+num_workers = 0
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -58,7 +58,7 @@ std_norm =True
 
 # Training
 batch_size = 64
-learning_rate = 1e-4
+learning_rate = 1e-3
 # weight_decay = 1e-4
 # momentum = 0.9
 log_interval = 1
@@ -66,7 +66,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_normdataset_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_shuffle_normdataset_batch64_lr1e-3_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []
@@ -111,7 +111,7 @@ valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir
                                                      rdcc_nslots=rdcc_nslots,
                                                      seq_length=seq_length)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
@@ -149,8 +149,8 @@ def main():
         np.save(model_dir + '/' + 'trainset_mean.npy', mean)
         np.save(model_dir + '/' + 'trainset_std.npy', std)
 
-    mean = torch.tensor(mean).to(device)
-    std = torch.tensor(std).to(device)
+        mean = torch.tensor(mean).to(device)
+        std = torch.tensor(std).to(device)
 
     # Start log file
     file = open(model_dir + '/' +'output_batch.log','w') 

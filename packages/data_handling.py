@@ -111,12 +111,12 @@ class HDF5SequenceSpectrogramLabeledFrames(Dataset):
         # video_frames = video_frames[start_point:(start_point + self.seq_length)]
         if i < self.seq_length:
             # return smaller sequence
-            return torch.Tensor(self.data[...,:i+1]), torch.Tensor(self.labels[...,i]) # Take only the last label
+            return torch.Tensor(self.data[...,:i+1]), torch.Tensor(self.labels[...,i:i+1]) # Take only the last label
         # elif i > self.dataset_len - self.seq_length:
         #     #TODO: do not return sequence            
         else:
             # return full sequence
-            return torch.Tensor(self.data[...,i-self.seq_length:i]), torch.Tensor(self.labels[...,i]) # Take only the last label
+            return torch.Tensor(self.data[...,i+1-self.seq_length:i+1]), torch.Tensor(self.labels[...,i:i+1]) # Take only the last label
 
     def __len__(self):
         return self.dataset_len
