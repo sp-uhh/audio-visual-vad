@@ -30,7 +30,7 @@ labels = 'vad_labels'
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 0
+num_workers = 16
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -52,13 +52,14 @@ if labels == 'noisy_vad_labels':
 lstm_layers = 2
 lstm_hidden_size = 1024 
 seq_length = 15
+# seq_length = 5
 batch_norm=False
 std_norm =True
 
 
 # Training
 batch_size = 64
-learning_rate = 1e-3
+learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
 log_interval = 1
@@ -66,7 +67,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_shuffle_normdataset_batch64_lr1e-3_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []

@@ -1,5 +1,6 @@
 import torch
 from torch.autograd import Variable
+from torch.nn.utils.rnn import pad_packed_sequence
 
 def weights_init_normal(m, mean=0.0, std=0.005):
     classname = m.__class__.__name__
@@ -23,6 +24,12 @@ def weights_init_normal(m, mean=0.0, std=0.005):
         m.weight.data.normal_(1.0, 0.02)
         if m.bias is not None:
             m.bias.data.zero_()
+
+def method1(packed): # TrentBrick Mar 28, 2019
+    output, input_sizes = pad_packed_sequence(packed, batch_first=True)
+    last_seq_idxs = torch.LongTensor([x-1 for x in input_sizes])
+    last_seq_items = output[range(output.shape[0]), last_seq_idxs, :]
+    return last_seq_items
 
 def method3(packed, lengths):
     """

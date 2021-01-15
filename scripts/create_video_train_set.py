@@ -217,6 +217,9 @@ def main():
                                                         quantile_weight=ibm_quantile_weight)
                     label = speech_ibm
 
+                # Reduce frames of label
+                label = label[...,:video.shape[-1]]
+
                 # Store spectrogram in label
                 fy.resize((fy.shape[-1] + label.shape[-1]), axis = len(fy.shape)-1)
                 fy[...,-label.shape[-1]:] = label
