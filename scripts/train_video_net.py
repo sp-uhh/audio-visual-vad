@@ -28,11 +28,17 @@ dataset_name = 'ntcd_timit'
 data_dir = 'export'
 labels = 'vad_labels'
 
+# Distributed Data Parallel
+n_machines = 1
+ngpus_per_node = 4
+world_size = ngpus_per_node * n_machines
+rank = 0 # redefined below
+
 # System 
 cuda = torch.cuda.is_available()
-cuda_device = "cuda:0"
-device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 16
+# cuda_device = "cuda:0"
+# device = torch.device(cuda_device if cuda else "cpu")
+num_workers = 8 # redefined below
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -60,7 +66,7 @@ std_norm =True
 
 
 # Training
-batch_size = 64
+batch_size = 64 # redefined below
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -69,7 +75,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_ddp_align_shuffle_normdataset_batch64_seqlength15_end_epoch_{:03d}'.format(end_epoch)
 
 # GPU Multiprocessing
 nb_devices = torch.cuda.device_count()
@@ -104,61 +110,62 @@ gpu_list = np.arange(nb_devices)
 
 #####################################################################################################
 
-print('Load data')
-output_h5_dir = os.path.join('data', dataset_size, data_dir, dataset_name + '_' + labels + '.h5')
-
-train_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
-                                                     dataset_type='train',
-                                                     rdcc_nbytes=rdcc_nbytes,
-                                                     rdcc_nslots=rdcc_nslots,
-                                                     seq_length=seq_length)
-valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
-                                                     dataset_type='validation',
-                                                     rdcc_nbytes=rdcc_nbytes,
-                                                     rdcc_nslots=rdcc_nslots,
-                                                     seq_length=seq_length)
-
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
-                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
-                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
-
-print('- Number of training samples: {}'.format(len(train_dataset)))
-print('- Number of validation samples: {}'.format(len(valid_dataset)))
-
-print('- Number of training batches: {}'.format(len(train_loader)))
-print('- Number of validation batches: {}'.format(len(valid_loader)))
-
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 
     # initialize the process group
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
 
 def cleanup():
     dist.destroy_process_group()
 
-def main(device, world_size):
-    print(f"Running DDP on rank {device}.")
-    setup(device, world_size)
+def main(gpu, ngpus_per_node):
+    # For multiprocessing distributed training, rank needs to be the
+    # global rank among all the processes
+    rank = 0
+    batch_size = 64
+    num_workers = 16
+
+    rank = rank * ngpus_per_node + gpu
+
+    print(f"Running DDP on rank {rank}.")
+    setup(rank, world_size)
+
+    # When using a single GPU per process and per
+    # DistributedDataParallel, we need to divide the batch size
+    # ourselves based on the total number of GPUs we have
+    batch_size = int(batch_size / ngpus_per_node)
+    num_workers = int((num_workers + ngpus_per_node - 1) / ngpus_per_node)
 
     print('Create model')
     # model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
     model = DeepVAD_video(lstm_layers, lstm_hidden_size, batch_size)
 
-    if cuda: model = model.to(device)
-
-    # Multi-GPU training
-    # model = torch.nn.DataParallel(model, device_ids=gpu_list)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device])
+    # For multiprocessing distributed, DistributedDataParallel constructor
+    # should always set the single device scope, otherwise,
+    # DistributedDataParallel will use all available devices.
+    torch.cuda.set_device(gpu)
+    model.to(gpu)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
 
     # Create model folder
     model_dir = os.path.join('models', model_name)
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
+
+    # Start log file
+    file = open(model_dir + '/' +'output_batch.log','w') 
+    file = open(model_dir + '/' +'output_epoch.log','w') 
+
+    # Optimizer settings
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
+    # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
+    criterion = nn.CrossEntropyLoss().cuda()
+
+    # DataLoader
+    print('Load data')
+    output_h5_dir = os.path.join('data', dataset_size, data_dir, dataset_name + '_' + labels + '.h5')
 
     if std_norm:
         print('Load mean and std')
@@ -173,18 +180,35 @@ def main(device, world_size):
         np.save(model_dir + '/' + 'trainset_mean.npy', mean)
         np.save(model_dir + '/' + 'trainset_std.npy', std)
 
-        mean = torch.tensor(mean).to(device)
-        std = torch.tensor(std).to(device)
+        mean = torch.tensor(mean).to(gpu)
+        std = torch.tensor(std).to(gpu)
 
-    # Start log file
-    file = open(model_dir + '/' +'output_batch.log','w') 
-    file = open(model_dir + '/' +'output_epoch.log','w') 
+    train_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
+                                                        dataset_type='train',
+                                                        rdcc_nbytes=rdcc_nbytes,
+                                                        rdcc_nslots=rdcc_nslots,
+                                                        seq_length=seq_length)
+    valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
+                                                        dataset_type='validation',
+                                                        rdcc_nbytes=rdcc_nbytes,
+                                                        rdcc_nslots=rdcc_nslots,
+                                                        seq_length=seq_length)
 
-    # Optimizer settings
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
-    # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss().cuda()
+    # Sampler for training
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, sampler=train_sampler, 
+                            batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+                            drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+                            batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+                            drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
+
+    print('- Number of training samples: {}'.format(len(train_dataset)))
+    print('- Number of validation samples: {}'.format(len(valid_dataset)))
+
+    print('- Number of training batches: {}'.format(len(train_loader)))
+    print('- Number of validation batches: {}'.format(len(valid_loader)))
 
     t = len(train_loader)
     m = len(valid_loader)
@@ -192,13 +216,16 @@ def main(device, world_size):
 
     print('Start training')
     for epoch in range(start_epoch, end_epoch):
+        train_sampler.set_epoch(epoch)
+
         model.train()
+
         total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
         # for batch_idx, (x, y) in enumerate(train_loader):
         for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
             if cuda:
                 # x, y = x.to(device), y.long().to(device)
-                x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                x, y, lengths = x.to(gpu), y.long().to(gpu), lengths.to(gpu)
 
             # Normalize power spectrogram
             if std_norm:
@@ -259,7 +286,7 @@ def main(device, world_size):
 
                 if cuda:
                     # x, y = x.to(device), y.long().to(device)
-                    x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                    x, y, lengths = x.to(gpu), y.long().to(gpu), lengths.to(gpu)
 
                 # y_hat_soft = model(x)
                 # Normalize power spectrogram
@@ -300,16 +327,15 @@ def main(device, world_size):
     # Distribued Data Parallel
     cleanup()
 
-def run_demo(fn, world_size):
+def run_demo(fn):
     mp.spawn(
         fn,
-        # args, #= (args[0], args[1], args[2], args[3], args[4]),
-        args = (world_size,),
-        nprocs = world_size, # Also tried 2 , but no difference
-        join = True
+        nprocs = ngpus_per_node,
+        args = (ngpus_per_node, ),
+        # join = True
     )
 
 if __name__ == '__main__':
     # main()
-    run_demo(main, nb_devices)
+    run_demo(main)
     
