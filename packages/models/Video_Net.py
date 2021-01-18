@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as F
 from torch.autograd import Variable
-from packages.models.utils import weights_init_normal, method3
+from packages.models.utils import weights_init_normal, method1, method3
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
@@ -73,6 +73,7 @@ class DeepVAD_video(nn.Module):
         
         # Unpack the feature vector & get last output
         out = method3(out, lengths)
+        # out = method1(out)
         # out, lens_unpacked = pad_packed_sequence(out, batch_first=True)
 
         # out = self.dropout(out[-1])  # select last time step. many -> one

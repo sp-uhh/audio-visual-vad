@@ -54,6 +54,7 @@ if labels == 'noisy_vad_labels':
 lstm_layers = 2
 lstm_hidden_size = 1024 
 seq_length = 15
+# seq_length = 5
 batch_norm=False
 std_norm =True
 
@@ -68,7 +69,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_normdataset_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
 
 # GPU Multiprocessing
 nb_devices = torch.cuda.device_count()
@@ -117,7 +118,7 @@ valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir
                                                      rdcc_nslots=rdcc_nslots,
                                                      seq_length=seq_length)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
@@ -172,8 +173,8 @@ def main(device, world_size):
         np.save(model_dir + '/' + 'trainset_mean.npy', mean)
         np.save(model_dir + '/' + 'trainset_std.npy', std)
 
-    mean = torch.tensor(mean).to(device)
-    std = torch.tensor(std).to(device)
+        mean = torch.tensor(mean).to(device)
+        std = torch.tensor(std).to(device)
 
     # Start log file
     file = open(model_dir + '/' +'output_batch.log','w') 

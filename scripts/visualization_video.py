@@ -24,7 +24,9 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
 
 # Settings
-dataset_type = 'test'
+# dataset_type = 'test'
+# dataset_type = 'validation'
+dataset_type = 'train'
 
 dataset_size = 'subset'
 #dataset_size = 'complete'
