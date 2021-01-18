@@ -7,7 +7,7 @@ def count_parameters(model):
 
 # a simple custom collate function, just to show the idea
 def my_collate(batch):
-    lengths = [i[0].size(-1) for i in batch]   # get the length of each sequence in the batch
+    lengths = [i[2] for i in batch]   # get the length of each sequence in the batch
     batch_size = len(batch)
     seq_length = max(lengths)
     width, height, channel, _ = batch[0][0].size()
