@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader
 # from video_net import VideoClassifier
 # from data_handling import VideoFrames
 
-from packages.data_handling import HDF5SequenceSpectrogramLabeledFrames
+from packages.data_handling import HDF5SequenceSpectrogramLabeledFrames, HDF5WholeSequenceSpectrogramLabeledFrames
 from packages.models.Video_Net import DeepVAD_video
 from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2classes, f1_loss
-from packages.utils import count_parameters, my_collate
+from packages.utils import count_parameters, my_collate, collate_many2many
 
 # Dataset
 # dataset_size = 'subset'
@@ -67,7 +67,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_multigpu_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []
@@ -101,7 +101,7 @@ if labels == 'vad_labels':
 print('Load data')
 output_h5_dir = os.path.join('data', dataset_size, data_dir, dataset_name + '_' + labels + '.h5')
 
-train_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
+train_dataset = HDF5WholeSequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
                                                      dataset_type='train',
                                                      rdcc_nbytes=rdcc_nbytes,
                                                      rdcc_nslots=rdcc_nslots,
@@ -114,8 +114,8 @@ valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
 
@@ -129,6 +129,10 @@ def main():
     print('Create model')
     # model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
     model = DeepVAD_video(lstm_layers, lstm_hidden_size, batch_size)
+
+    if cuda: model = model.to(device)
+
+    model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
 
     if cuda: model = model.to(device)
 
@@ -161,7 +165,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
     # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss().cuda()
-
+    # criterion = nn.CrossEntropyLoss(reduction="sum", ignore_index=0).to(device)
 
     t = len(train_loader)
     m = len(valid_loader)
@@ -188,7 +192,13 @@ def main():
 
             # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
             y = torch.squeeze(y)
+            y_hat_soft = y_hat_soft.permute(0,2,1) # (B,C,T) --> to match cross entropy loss
             loss = criterion(y_hat_soft, y)
+            # loss = 0.
+            # for pred, target in zip(y_hat_soft, y):
+            # for i in range(y_hat_soft.size(0)):
+            #     loss += criterion(y_hat_soft[i], y[i], ignore_index=0)
+            # loss /= len(y_hat_soft)
 
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
             loss.backward()
@@ -244,9 +254,9 @@ def main():
                     x_norm = x - mean.T
                     x_norm /= (std + eps).T
 
-                    y_hat_soft = model(x_norm, lengths) 
+                    y_hat_soft = model(x_norm, lengths, True) 
                 else:
-                    y_hat_soft = model(x, lengths)
+                    y_hat_soft = model(x, lengths, True)
                 
                 y = torch.squeeze(y)
                 loss = criterion(y_hat_soft, y)

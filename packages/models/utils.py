@@ -27,9 +27,11 @@ def weights_init_normal(m, mean=0.0, std=0.005):
 
 def method1(packed): # TrentBrick Mar 28, 2019
     output, input_sizes = pad_packed_sequence(packed, batch_first=True)
-    last_seq_idxs = torch.LongTensor([x-1 for x in input_sizes])
-    last_seq_items = output[range(output.shape[0]), last_seq_idxs, :]
-    return last_seq_items
+    # last_seq_idxs = torch.LongTensor([x-1 for x in input_sizes])
+    # last_seq_items = output[range(output.shape[0]), last_seq_idxs, :]
+    reconst_output = [output[i, :input_sizes[i]] for i in range(output.size(0)) ]
+    # return last_seq_items
+    return reconst_output
 
 def method3(packed, lengths):
     """

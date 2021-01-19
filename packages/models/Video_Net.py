@@ -44,7 +44,7 @@ class DeepVAD_video(nn.Module):
         for m in self.named_parameters():
             weights_init_normal(m, mean=mean, std=std)
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths, return_last=False):
         try:
             batch, frames, channels, height, width = x.squeeze().size()
             # batch, frames, width, height, channels, = x.squeeze().size()
@@ -72,9 +72,12 @@ class DeepVAD_video(nn.Module):
         out, _ = self.lstm_video(x)  # output shape - seq len X Batch X lstm size
         
         # Unpack the feature vector & get last output
-        out = method3(out, lengths)
+        ##TODO: change and get the whole sequence
+        if return_last:
+            out = method3(out, lengths)
         # out = method1(out)
-        # out, lens_unpacked = pad_packed_sequence(out, batch_first=True)
+        else:
+            out, lens_unpacked = pad_packed_sequence(out, batch_first=True)
 
         # out = self.dropout(out[-1])  # select last time step. many -> one
         out = self.dropout(out)

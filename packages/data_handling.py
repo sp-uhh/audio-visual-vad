@@ -109,6 +109,7 @@ class HDF5SequenceSpectrogramLabeledFrames(Dataset):
 
         # start_point = np.random.randint(matlab_frames_list_per_user.shape[0] - self.seq_length)
         # video_frames = video_frames[start_point:(start_point + self.seq_length)]
+        #TODO: change and move to the next sequence without overlapping (or overlapping by half)
         if i < self.seq_length:
             # return smaller sequence
             data = np.array(self.data[...,:i+1])
@@ -123,6 +124,58 @@ class HDF5SequenceSpectrogramLabeledFrames(Dataset):
             length = data.shape[-1]
             # return torch.Tensor(self.data[...,i+1-self.seq_length:i+1]), torch.Tensor(self.labels[...,i:i+1]) # Take only the last label
             return torch.Tensor(data), torch.Tensor(labels), length #, length # Take only the last label
+
+    def __len__(self):
+        return self.dataset_len
+        # return math.ceil(self.dataset_len / self.seq_length)
+
+    def __del__(self): 
+        if hasattr(self, 'f'):
+            self.f.close()
+
+class HDF5WholeSequenceSpectrogramLabeledFrames(Dataset):
+    def __init__(self, output_h5_dir, dataset_type, rdcc_nbytes, rdcc_nslots, seq_length):
+        # Do not load hdf5 in __init__ if num_workers > 0
+        self.output_h5_dir = output_h5_dir
+        self.dataset_type = dataset_type
+        self.rdcc_nbytes = rdcc_nbytes
+        self.rdcc_nslots = rdcc_nslots
+        self.seq_length = seq_length
+        with h5.File(self.output_h5_dir, 'r') as file:
+            dataset_len = file["X_" + dataset_type].shape[-1]
+            self.dataset_len = math.ceil(dataset_len / seq_length)
+
+    def open_hdf5(self):
+        #We are using 400Mb of chunk_cache_mem here ("rdcc_nbytes" and "rdcc_nslots")
+        self.f = h5.File(self.output_h5_dir, 'r', rdcc_nbytes=self.rdcc_nbytes, rdcc_nslots=self.rdcc_nslots)
+        
+        # Faster to open datasets once, rather than at every call of __getitem__
+        self.data = self.f['X_' + self.dataset_type]
+        self.labels = self.f['Y_' + self.dataset_type]
+
+    def __getitem__(self, i):
+        # Open hdf5 here if num_workers > 0
+        if not hasattr(self, 'f'):
+            self.open_hdf5()
+        
+        i = i * self.seq_length
+
+        # data = torch.zeros(self.seq_length, 1)
+        # target = torch.zeros(self.seq_length,1)
+
+        # data[i] = torch.tensor(self.data[:,:,][0])
+        # target[i] = torch.tensor(self.oudataframe.iloc[idx+i][1])
+
+        # start_point = np.random.randint(matlab_frames_list_per_user.shape[0] - self.seq_length)
+        # video_frames = video_frames[start_point:(start_point + self.seq_length)]
+        
+        #TODO: change and move to the next sequence without overlapping (or overlapping by half)
+        # return full sequence
+        data = np.array(self.data[...,i:i+self.seq_length])
+        labels = np.array(self.labels[...,i:i+self.seq_length])
+        length = data.shape[-1]
+        # return torch.Tensor(self.data[...,i+1-self.seq_length:i+1]), torch.Tensor(self.labels[...,i:i+1]) # Take only the last label
+        return torch.Tensor(data), torch.Tensor(labels), length #, length # Take only the last label
 
     def __len__(self):
         return self.dataset_len
