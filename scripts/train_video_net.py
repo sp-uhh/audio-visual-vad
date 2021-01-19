@@ -77,10 +77,6 @@ end_epoch = 100
 if labels == 'vad_labels':
     model_name = 'Video_Classifier_ddp_align_shuffle_normdataset_batch64_seqlength15_end_epoch_{:03d}'.format(end_epoch)
 
-# GPU Multiprocessing
-nb_devices = torch.cuda.device_count()
-gpu_list = np.arange(nb_devices)
-
 # print('Load data')
 # train_files = []
 # train_data_path = "data/complete/matlab_raw/train/"
@@ -124,7 +120,7 @@ def main(gpu, ngpus_per_node):
     # For multiprocessing distributed training, rank needs to be the
     # global rank among all the processes
     rank = 0
-    batch_size = 64
+    batch_size = 128
     num_workers = 16
 
     rank = rank * ngpus_per_node + gpu
@@ -161,7 +157,7 @@ def main(gpu, ngpus_per_node):
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
     # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(gpu)
 
     # DataLoader
     print('Load data')
