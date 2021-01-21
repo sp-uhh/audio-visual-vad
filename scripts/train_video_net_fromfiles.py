@@ -30,7 +30,7 @@ labels = 'vad_labels'
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 16
+num_workers = 32
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -58,7 +58,7 @@ std_norm =True
 
 
 # Training
-batch_size = 16
+batch_size = 64
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -127,9 +127,9 @@ def main():
 
     if cuda: model = model.to(device)
 
-    # model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
 
-    # if cuda: model = model.to(device)
+    if cuda: model = model.to(device)
 
     # Create model folder
     model_dir = os.path.join('models', model_name)

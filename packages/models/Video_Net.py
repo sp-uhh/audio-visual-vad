@@ -66,6 +66,7 @@ class DeepVAD_video(nn.Module):
 
         # Pack the feature vector
         # input_dim must be (batch, seq_len, Features)
+        total_length = x.size(1) # to make unpacking work with DataParallel
         x = pack_padded_sequence(x, lengths=lengths, enforce_sorted=False, batch_first=True)
 
         # out, _ = self.lstm_video(x, h)  # output shape - seq len X Batch X lstm size
@@ -77,13 +78,7 @@ class DeepVAD_video(nn.Module):
             out = method3(out, lengths)
         # out = method1(out)
         else:
-            out, lens_unpacked = pad_packed_sequence(out, batch_first=True)
-
-        # # In order to use packing/unpacking with DataParallel
-        # # max_T = maximum length of the sequence in the whole batch
-        # # lengths.max() = maximum length of the sequence in the chunked batch
-        # padded_output = Variable(torch.zeros(max_T, output.size()[1], output.size()[2]))
-        # padded_output[:lengths.max(), :, :] = output
+            out, lens_unpacked = pad_packed_sequence(out, batch_first=True, total_length=total_length) # to make unpacking work with DataParallel
 
         # out = self.dropout(out[-1])  # select last time step. many -> one
         out = self.dropout(out)
