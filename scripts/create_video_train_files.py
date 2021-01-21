@@ -181,8 +181,8 @@ def main():
                 # Exact shape of dataset is unknown in advance unfortunately
                 # Faster writing if you know the shape in advance
                 # Size of chunks corresponds to one spectrogram frame
-                f.create_dataset('X', shape=X_shape, dtype='float32', maxshape=X_maxshape, chunks=X_chunks, compression=compression)
-                f.create_dataset('Y', shape=Y_shape, dtype='float32', maxshape=Y_maxshape, chunks=Y_chunks, compression=compression)
+                f.create_dataset('X', shape=X_shape, dtype='float32', maxshape=X_maxshape, chunks=None, compression=compression)
+                f.create_dataset('Y', shape=Y_shape, dtype='float32', maxshape=Y_maxshape, chunks=None, compression=compression)
 
                 # Store dataset in variables for faster I/O
                 fx = f['X']
