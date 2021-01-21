@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 # from video_net import VideoClassifier
 # from data_handling import VideoFrames
 
-from packages.data_handling import HDF5SequenceSpectrogramLabeledFrames, HDF5WholeSequenceSpectrogramLabeledFrames
+from packages.data_handling import WavWholeSequenceSpectrogramLabeledFrames
 from packages.models.Video_Net import DeepVAD_video
 from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2classes, f1_loss
 from packages.utils import count_parameters, my_collate, collate_many2many
@@ -51,14 +51,14 @@ if labels == 'noisy_vad_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
-seq_length = 15
+# seq_length = 15
 # seq_length = 5
 batch_norm=False
 std_norm =True
 
 
 # Training
-batch_size = 64
+batch_size = 16
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -67,7 +67,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_multigpu_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_multigpu_align_shuffle_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []
@@ -102,23 +102,17 @@ print('Load data')
 output_h5_dir = os.path.join('data', dataset_size, data_dir, dataset_name + '_' + labels + '.h5')
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
 
-train_dataset = HDF5WholeSequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
-                                                     dataset_type='train',
-                                                     rdcc_nbytes=rdcc_nbytes,
-                                                     rdcc_nslots=rdcc_nslots,
-                                                     seq_length=seq_length)
-valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
-                                                     dataset_type='validation',
-                                                     rdcc_nbytes=rdcc_nbytes,
-                                                     rdcc_nslots=rdcc_nslots,
-                                                     seq_length=seq_length)
+train_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
+                                                     dataset_type='train')
+valid_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
+                                                     dataset_type='validation')
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
 
 print('- Number of training samples: {}'.format(len(train_dataset)))
 print('- Number of validation samples: {}'.format(len(valid_dataset)))
@@ -133,9 +127,9 @@ def main():
 
     if cuda: model = model.to(device)
 
-    model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    # model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
 
-    if cuda: model = model.to(device)
+    # if cuda: model = model.to(device)
 
     # Create model folder
     model_dir = os.path.join('models', model_name)
@@ -165,8 +159,8 @@ def main():
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
     # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss().cuda()
-    # criterion = nn.CrossEntropyLoss(reduction="sum", ignore_index=0).to(device)
+    # criterion = nn.CrossEntropyLoss(ignore_index=0).to(device) # Ignore padding in the loss
+    criterion = nn.CrossEntropyLoss().to(device) # Ignore padding in the loss
 
     t = len(train_loader)
     m = len(valid_loader)
@@ -194,12 +188,11 @@ def main():
             # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
             y = torch.squeeze(y)
             y_hat_soft = y_hat_soft.permute(0,2,1) # (B,C,T) --> to match cross entropy loss
-            loss = criterion(y_hat_soft, y)
-            # loss = 0.
-            # for pred, target in zip(y_hat_soft, y):
-            # for i in range(y_hat_soft.size(0)):
-            #     loss += criterion(y_hat_soft[i], y[i], ignore_index=0)
-            # loss /= len(y_hat_soft)
+            # loss = criterion(y_hat_soft, y)
+            loss = 0.
+            for (length, pred, target) in zip(lengths, y_hat_soft, y):
+                loss += criterion(pred[None, ...,:length], target[None, :length])
+            loss /= len(lengths)
 
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
             loss.backward()
@@ -209,10 +202,15 @@ def main():
             total_loss += loss.item()
             _, y_hat_hard = torch.max(y_hat_soft.data, 1)
 
-
-            # y_hat_hard = (y_hat_soft[:,0] > 0.5).int()
-
-            f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+            #TODO: exclude padding from F1-score
+            y_hat_hard_batch, y_batch = [], []
+            for (length, pred, target) in zip(lengths, y_hat_hard, y):
+                y_hat_hard_batch.append(pred[...,:length])
+                y_batch.append(target[...,:length])
+            y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
+            y_batch = torch.cat(y_batch[:length], axis=0)
+            # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+            f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=y_hat_hard_batch, y=y_batch, epsilon=eps)
             total_tp += tp.item()
             total_tn += tn.item()
             total_fp += fp.item()
@@ -255,17 +253,30 @@ def main():
                     x_norm = x - mean.T
                     x_norm /= (std + eps).T
 
-                    y_hat_soft = model(x_norm, lengths, True) 
+                    y_hat_soft = model(x_norm, lengths) 
                 else:
-                    y_hat_soft = model(x, lengths, True)
+                    y_hat_soft = model(x, lengths)
                 
                 y = torch.squeeze(y)
-                loss = criterion(y_hat_soft, y)
+                y_hat_soft = y_hat_soft.permute(0,2,1) # (B,C,T) --> to match cross entropy loss
+                # loss = criterion(y_hat_soft, y)
+                loss = 0.
+                for (length, pred, target) in zip(lengths, y_hat_soft, y):
+                    loss += criterion(pred[None, ...,:length], target[None, :length])
+                loss /= len(lengths)
 
                 total_loss += loss.item()
                 _, y_hat_hard = torch.max(y_hat_soft.data, 1)
 
-                f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+                #TODO: exclude padding from F1-score
+                y_hat_hard_batch, y_batch = [], []
+                for (length, pred, target) in zip(lengths, y_hat_hard, y):
+                    y_hat_hard_batch.append(pred[...,:length])
+                    y_batch.append(target[...,:length])
+                y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
+                y_batch = torch.cat(y_batch[:length], axis=0)
+                # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+                f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=y_hat_hard_batch, y=y_batch, epsilon=eps)
                 total_tp += tp.item()
                 total_tn += tn.item()
                 total_fp += fp.item()

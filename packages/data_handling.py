@@ -7,6 +7,10 @@ import h5py as h5 # to read .mat files
 from scipy.fftpack import idct
 import math
 
+# Parameters
+dataset_name = 'ntcd_timit'
+if dataset_name == 'ntcd_timit':
+    from packages.dataset.ntcd_timit import video_list, speech_list
 
 base_path = "data/complete/matlab_raw/"
 
@@ -73,7 +77,6 @@ class HDF5SpectrogramLabeledFrames(Dataset):
     def __del__(self): 
         if hasattr(self, 'f'):
             self.f.close()
-
 
 class HDF5SequenceSpectrogramLabeledFrames(Dataset):
     def __init__(self, output_h5_dir, dataset_type, rdcc_nbytes, rdcc_nslots, seq_length):
@@ -184,3 +187,30 @@ class HDF5WholeSequenceSpectrogramLabeledFrames(Dataset):
     def __del__(self): 
         if hasattr(self, 'f'):
             self.f.close()
+
+class WavWholeSequenceSpectrogramLabeledFrames(Dataset):
+    def __init__(self, input_video_dir, dataset_type):
+        # Do not load hdf5 in __init__ if num_workers > 0
+        self.dataset_type = dataset_type        
+        self.input_video_dir = input_video_dir
+
+        # Create file list
+        self.mat_file_paths = video_list(input_video_dir=input_video_dir,
+                                dataset_type=dataset_type)
+        
+        self.dataset_len = len(self.mat_file_paths) # total number of utterances
+
+    def __getitem__(self, i):
+        # select utterance
+        h5_file_path = self.input_video_dir + self.mat_file_paths[i]
+
+        # Open HDF5 file
+        with h5.File(h5_file_path, 'r') as file:
+            data = np.array(file["X"][:])
+            labels = np.array(file["Y"][:])
+            length = data.shape[-1]
+        
+        return torch.Tensor(data), torch.Tensor(labels), length #, length # Take only the last label
+
+    def __len__(self):
+        return self.dataset_len

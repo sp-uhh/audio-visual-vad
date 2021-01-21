@@ -45,6 +45,8 @@ def video_list(input_video_dir,
 
     # List of files
     file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
+    if not file_paths:
+        file_paths = sorted(glob(data_dir + '**/*.h5',recursive=True))
 
     # Remove input_video_dir from file_paths
     file_paths = [os.path.relpath(path, input_video_dir) for path in file_paths]

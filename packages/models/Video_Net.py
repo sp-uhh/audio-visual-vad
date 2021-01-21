@@ -79,9 +79,15 @@ class DeepVAD_video(nn.Module):
         else:
             out, lens_unpacked = pad_packed_sequence(out, batch_first=True)
 
+        # # In order to use packing/unpacking with DataParallel
+        # # max_T = maximum length of the sequence in the whole batch
+        # # lengths.max() = maximum length of the sequence in the chunked batch
+        # padded_output = Variable(torch.zeros(max_T, output.size()[1], output.size()[2]))
+        # padded_output[:lengths.max(), :, :] = output
+
         # out = self.dropout(out[-1])  # select last time step. many -> one
         out = self.dropout(out)
-        out = F.sigmoid(self.vad_video(out))
+        out = torch.sigmoid(self.vad_video(out))
         return out
 
     def init_hidden(self,is_train):
