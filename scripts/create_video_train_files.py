@@ -199,7 +199,7 @@ def main():
             # Compute mean, std
             if dataset_type == 'train':
                 # VAR = E[X**2] - E[X]**2
-                n_samples = video.shape[-1]
+                n_samples += video.shape[-1]
                 channels_sum += np.sum(video, axis=-1)
                 channels_squared_sum += np.sum(video**2, axis=-1)
         
