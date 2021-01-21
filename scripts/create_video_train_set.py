@@ -45,6 +45,8 @@ pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 dtype = 'complex64'
 
+# ResNet norm
+resnet_norm = False
 
 ## Noise robust VAD
 vad_quantile_fraction_begin = 0.93
@@ -74,7 +76,10 @@ compression = 'lzf'
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'raw/')
 output_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_dataset_file = os.path.join('data', dataset_size, output_data_folder, dataset_name + '_' + labels + '.h5')
+if resnet_norm:
+    output_dataset_file = os.path.join('data', dataset_size, output_data_folder, dataset_name + '_' + labels + '_resnet_norm' + '.h5')
+else:
+    output_dataset_file = os.path.join('data', dataset_size, output_data_folder, dataset_name + '_' + labels + '.h5')
 
 def main():
     

@@ -67,7 +67,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_align_shuffle_normdataset_batch64_seqlength5_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_1class_pretainnorm_normdataset_align_seqlength15_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []
@@ -116,7 +116,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sa
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
-                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory,
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
 
 print('- Number of training samples: {}'.format(len(train_dataset)))
@@ -129,6 +129,10 @@ def main():
     print('Create model')
     # model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
     model = DeepVAD_video(lstm_layers, lstm_hidden_size, batch_size)
+
+    if cuda: model = model.to(device)
+
+    model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
 
     if cuda: model = model.to(device)
 
@@ -160,7 +164,7 @@ def main():
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
     # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(device)
 
 
     t = len(train_loader)
@@ -175,7 +179,8 @@ def main():
         for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
             if cuda:
                 # x, y = x.to(device), y.long().to(device)
-                x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                # x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                x, y, lengths = x.to(device), y.to(device), lengths.to(device)
 
             # Normalize power spectrogram
             if std_norm:
@@ -187,17 +192,20 @@ def main():
                 y_hat_soft = model(x, lengths)
 
             # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
-            y = torch.squeeze(y)
-            loss = criterion(y_hat_soft, y)
+            
+            # y = torch.squeeze(y)
+            # loss = criterion(y_hat_soft, y)
+            
+            loss = binary_cross_entropy(y_hat_soft, y) #, eps)
 
-            # loss = binary_cross_entropy(y_hat_soft, y, eps)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
 
             total_loss += loss.item()
-            _, y_hat_hard = torch.max(y_hat_soft.data, 1)
-
+            # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+            y_hat_soft = torch.sigmoid(y_hat_soft.detach())
+            y_hat_hard = (y_hat_soft > 0.5).int()
 
             # y_hat_hard = (y_hat_soft[:,0] > 0.5).int()
 
@@ -236,7 +244,8 @@ def main():
 
                 if cuda:
                     # x, y = x.to(device), y.long().to(device)
-                    x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                    # x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                    x, y, lengths = x.to(device), y.to(device), lengths.to(device)
 
                 # y_hat_soft = model(x)
                 # Normalize power spectrogram
@@ -248,11 +257,15 @@ def main():
                 else:
                     y_hat_soft = model(x, lengths)
                 
-                y = torch.squeeze(y)
-                loss = criterion(y_hat_soft, y)
+                # y = torch.squeeze(y)
+                # loss = criterion(y_hat_soft, y)
+                
+                loss = binary_cross_entropy(y_hat_soft, y) #, eps)
 
                 total_loss += loss.item()
-                _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+                # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+                y_hat_soft = torch.sigmoid(y_hat_soft.detach())
+                y_hat_hard = (y_hat_soft > 0.5).int()
 
                 f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
                 total_tp += tp.item()
