@@ -67,7 +67,7 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_multigpu_align_shuffle_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_multigpu_align_shuffle_resnetnorm_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # print('Load data')
 # train_files = []
@@ -185,13 +185,10 @@ def main():
             else:
                 y_hat_soft = model(x, lengths)
 
-            # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
-            y = torch.squeeze(y)
-            y_hat_soft = y_hat_soft.permute(0,2,1) # (B,C,T) --> to match cross entropy loss
-            # loss = criterion(y_hat_soft, y)
+            y_hat_soft = torch.squeeze(y_hat_soft)
             loss = 0.
             for (length, pred, target) in zip(lengths, y_hat_soft, y):
-                loss += criterion(pred[None, ...,:length], target[None, :length])
+                loss += binary_cross_entropy(pred[:length], target[:length])
             loss /= len(lengths)
 
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
@@ -200,13 +197,15 @@ def main():
             optimizer.zero_grad()
 
             total_loss += loss.item()
-            _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+            # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+            y_hat_soft = torch.sigmoid(y_hat_soft.detach())
+            y_hat_hard = (y_hat_soft > 0.5).int()
 
-            #TODO: exclude padding from F1-score
+            # exclude padding from F1-score
             y_hat_hard_batch, y_batch = [], []
             for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                y_hat_hard_batch.append(pred[...,:length])
-                y_batch.append(target[...,:length])
+                y_hat_hard_batch.append(pred[:length])
+                y_batch.append(target[:length])
             y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
             y_batch = torch.cat(y_batch[:length], axis=0)
             # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
@@ -257,22 +256,22 @@ def main():
                 else:
                     y_hat_soft = model(x, lengths)
                 
-                y = torch.squeeze(y)
-                y_hat_soft = y_hat_soft.permute(0,2,1) # (B,C,T) --> to match cross entropy loss
-                # loss = criterion(y_hat_soft, y)
+                y_hat_soft = torch.squeeze(y_hat_soft)
                 loss = 0.
                 for (length, pred, target) in zip(lengths, y_hat_soft, y):
-                    loss += criterion(pred[None, ...,:length], target[None, :length])
+                    loss += binary_cross_entropy(pred[:length], target[:length])
                 loss /= len(lengths)
 
                 total_loss += loss.item()
-                _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+                # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
+                y_hat_soft = torch.sigmoid(y_hat_soft.detach())
+                y_hat_hard = (y_hat_soft > 0.5).int()
 
-                #TODO: exclude padding from F1-score
+                # exclude padding from F1-score
                 y_hat_hard_batch, y_batch = [], []
                 for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                    y_hat_hard_batch.append(pred[...,:length])
-                    y_batch.append(target[...,:length])
+                    y_hat_hard_batch.append(pred[:length])
+                    y_batch.append(target[:length])
                 y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
                 y_batch = torch.cat(y_batch[:length], axis=0)
                 # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
