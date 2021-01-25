@@ -110,26 +110,21 @@ def process_video(args):
             matlab_frames_list_per_user = np.array(value)
 
     # Process video
-
-
-
-
-    # initialize video writer
-    # fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-    
     video_filename = classif_data_dir + mat_file_path
-    video_filename = os.path.splitext(video_filename)[0] + '_skvideo.mp4'
+    # video_filename = os.path.splitext(video_filename)[0] + '_skvideo.mp4'
+    video_filename = os.path.splitext(video_filename)[0] + '_skvideo_upsampled_2.mp4'
     
     if not os.path.exists(os.path.dirname(video_filename)):
         os.makedirs(os.path.dirname(video_filename))
-
-    # out = cv2.VideoWriter(video_filename, fourcc, visual_frame_rate_i, (width, height))
     
     out = skvideo.io.FFmpegWriter(video_filename,
-                inputdict={'-r': str(visual_frame_rate_i), '-s':'{}x{}'.format(width,height)},
-                outputdict={'-r': str(visual_frame_rate_i), '-c:v': 'libx264', '-crf': str(crf), '-preset': 'veryslow'}
+                inputdict={'-r': str(visual_frame_rate_i),
+                           '-s':'{}x{}'.format(width,height)},
+                outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+                            '-c:v': 'libx264',
+                            '-crf': str(crf),
+                            '-preset': 'veryslow'}
     )
-
 
     for frame in range(matlab_frames_list_per_user.shape[0]):
         rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
@@ -137,11 +132,9 @@ def process_video(args):
                                width=width,
                                height=height,
                                y_hat_hard=None)
-        # out.write(rgb_rotated_df)
         out.writeFrame(rgb_rotated_df)
             
     # close out the video writer
-    # out.release()
     out.close()
 
     # Add the audio using ffmpeg-python
@@ -151,22 +144,8 @@ def process_video(args):
     out = out.overwrite_output()
     out.run()
 
-    new_video_filename = classif_data_dir + mat_file_path
-    # new_video_filename = os.path.splitext(video_filename)[0] + '_upsampled.mp4'
-    new_video_filename = os.path.splitext(video_filename)[0] + '_skvideo_upsampled.mp4'
-
-    # Upsample video
-    sp.check_output(['ffmpeg', '-y', '-i', video_filename, '-filter:v', 'fps=fps={}'.format(visual_frame_rate_o), new_video_filename])
-
-    # Add the audio using ffmpeg-python
-    video = ffmpeg.input(new_video_filename)
-    audio = ffmpeg.input(input_video_dir + audio_file_path)
-    out = ffmpeg.output(video, audio, os.path.splitext(new_video_filename)[0] + '_audio.mp4', vcodec='copy', acodec='aac', strict='experimental')
-    out = out.overwrite_output()
-    out.run()
-
     # Check length of new video w.r.t spectrogram
-    cap = cv2.VideoCapture(new_video_filename)
+    cap = cv2.VideoCapture(video_filename)
     frameCount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frameWidth = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frameHeight = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
