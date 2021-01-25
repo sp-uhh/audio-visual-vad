@@ -13,6 +13,7 @@ import time
 import concurrent.futures # for multiprocessing
 import soundfile as sf
 import subprocess as sp
+import skvideo.io
 
 from packages.processing.stft import stft
 from packages.processing.video import preprocess_ntcd_matlab
@@ -56,6 +57,7 @@ quantile_weight = 0.999
 ## Video
 width = 67
 height = 67
+crf = 0 #set the constant rate factor to 0, which is lossless
 
 ## Multiprocessing
 num_processes = os.cpu_count() + 4
@@ -108,27 +110,39 @@ def process_video(args):
             matlab_frames_list_per_user = np.array(value)
 
     # Process video
+
+
+
+
     # initialize video writer
-    fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+    # fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
     
     video_filename = classif_data_dir + mat_file_path
-    video_filename = os.path.splitext(video_filename)[0] + '.mp4'
+    video_filename = os.path.splitext(video_filename)[0] + '_skvideo.mp4'
     
     if not os.path.exists(os.path.dirname(video_filename)):
         os.makedirs(os.path.dirname(video_filename))
 
-    out = cv2.VideoWriter(video_filename, fourcc, visual_frame_rate_i, (width, height))
+    # out = cv2.VideoWriter(video_filename, fourcc, visual_frame_rate_i, (width, height))
     
+    out = skvideo.io.FFmpegWriter(video_filename,
+                inputdict={'-r': str(visual_frame_rate_i), '-s':'{}x{}'.format(width,height)},
+                outputdict={'-r': str(visual_frame_rate_i), '-c:v': 'libx264', '-crf': str(crf), '-preset': 'veryslow'}
+    )
+
+
     for frame in range(matlab_frames_list_per_user.shape[0]):
-        preprocess_ntcd_matlab(video_writer=out,
-                                matlab_frames=matlab_frames_list_per_user,
-                                frame=frame,
-                                width=width,
-                                height=height,
-                                y_hat_hard=None)
+        rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
+                               frame=frame,
+                               width=width,
+                               height=height,
+                               y_hat_hard=None)
+        # out.write(rgb_rotated_df)
+        out.writeFrame(rgb_rotated_df)
             
     # close out the video writer
-    out.release()
+    # out.release()
+    out.close()
 
     # Add the audio using ffmpeg-python
     video = ffmpeg.input(video_filename)
@@ -138,7 +152,8 @@ def process_video(args):
     out.run()
 
     new_video_filename = classif_data_dir + mat_file_path
-    new_video_filename = os.path.splitext(video_filename)[0] + '_upsampled.mp4'
+    # new_video_filename = os.path.splitext(video_filename)[0] + '_upsampled.mp4'
+    new_video_filename = os.path.splitext(video_filename)[0] + '_skvideo_upsampled.mp4'
 
     # Upsample video
     sp.check_output(['ffmpeg', '-y', '-i', video_filename, '-filter:v', 'fps=fps={}'.format(visual_frame_rate_o), new_video_filename])
