@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 # from video_net import VideoClassifier
 # from data_handling import VideoFrames
 
-from packages.data_handling import HDF5SequenceSpectrogramLabeledFrames, HDF5WholeSequenceSpectrogramLabeledFrames
+from packages.data_handling import WavWholeSequenceSpectrogramLabeledFrames
 from packages.models.Video_Net import DeepVAD_video
 from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2classes, f1_loss
 from packages.utils import count_parameters, my_collate, collate_many2many
@@ -30,7 +30,7 @@ labels = 'vad_labels'
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 16
+num_workers = 32
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -51,8 +51,6 @@ if labels == 'noisy_vad_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
-seq_length = 15
-# seq_length = 5
 batch_norm=False
 std_norm =True
 
@@ -67,58 +65,26 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_1class_pretainnorm_normdataset_align_seqlength15_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_multigpu_align_shuffle_pretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
-# print('Load data')
-# train_files = []
-# train_data_path = "data/complete/matlab_raw/train/"
-# speaker_folders_train = sorted(os.listdir(train_data_path))
-# for speaker_folder in speaker_folders_train:
-# 	video_folder_path = os.path.join(train_data_path, speaker_folder)
-# 	video_files = sorted([x for x in os.listdir(video_folder_path) if '.mat' in x])
-# 	for video_file in video_files:
-# 		train_files.append("train/{}/{}".format(speaker_folder, video_file[:-4]))
-
-# dataset_train = VideoFrames(train_files, seq_length)
-
-# valid_files = []
-# valid_data_path = "data/complete/matlab_raw/dev/"
-# speaker_folders_valid = sorted(os.listdir(valid_data_path))
-# for speaker_folder in speaker_folders_valid:
-# 	video_folder_path = os.path.join(valid_data_path, speaker_folder)
-# 	video_files = sorted([x for x in os.listdir(video_folder_path) if '.mat' in x])
-# 	for video_file in video_files:
-# 		valid_files.append("dev/{}/{}".format(speaker_folder, video_file[:-4]))
-
-# dataset_valid = VideoFrames(valid_files, seq_length)
-
-# train_loader = DataLoader(dataset_train, batch_size=batch_size, shuffle=True, drop_last=True)
-# valid_loader = DataLoader(dataset_valid, batch_size=batch_size, shuffle=False, drop_last=True)
-
+# Data directories
+input_video_dir = os.path.join('data', dataset_size, 'processed/')
+output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
 
 #####################################################################################################
 
 print('Load data')
-output_h5_dir = os.path.join('data', dataset_size, data_dir, dataset_name + '_' + labels + '.h5')
-input_video_dir = os.path.join('data', dataset_size, 'processed/')
-
-train_dataset = HDF5WholeSequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
-                                                     dataset_type='train',
-                                                     rdcc_nbytes=rdcc_nbytes,
-                                                     rdcc_nslots=rdcc_nslots,
-                                                     seq_length=seq_length)
-valid_dataset = HDF5SequenceSpectrogramLabeledFrames(output_h5_dir=output_h5_dir,
-                                                     dataset_type='validation',
-                                                     rdcc_nbytes=rdcc_nbytes,
-                                                     rdcc_nslots=rdcc_nslots,
-                                                     seq_length=seq_length)
+train_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
+                                                     dataset_type='train')
+valid_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
+                                                     dataset_type='validation')
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
-                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory,
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=my_collate)
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
+                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
 
 print('- Number of training samples: {}'.format(len(train_dataset)))
 print('- Number of validation samples: {}'.format(len(valid_dataset)))
@@ -144,9 +110,6 @@ def main():
 
     if std_norm:
         print('Load mean and std')
-        # Normalize train_data, valid_data
-        # mean = np.mean(np.power(abs(train_data), 2), axis=1)[:, None]
-        # std = np.std(np.power(abs(train_data), 2), axis=1, ddof=1)[:, None]
         with h5.File(output_h5_dir, 'r') as file:
             mean = file['X_train_mean'][:]
             std = file['X_train_std'][:]
@@ -164,9 +127,7 @@ def main():
 
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
-    # optimizer = torch.optim.SGD(model.parameters(), learning_rate, momentum=momentum, weight_decay=weight_decay)
-    criterion = nn.CrossEntropyLoss().to(device)
-
+    criterion = nn.CrossEntropyLoss().to(device) # Ignore padding in the loss
 
     t = len(train_loader)
     m = len(valid_loader)
@@ -180,8 +141,7 @@ def main():
         for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
             if cuda:
                 # x, y = x.to(device), y.long().to(device)
-                # x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
-                x, y, lengths = x.to(device), y.to(device), lengths.to(device)
+                x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
 
             # Normalize power spectrogram
             if std_norm:
@@ -192,13 +152,13 @@ def main():
             else:
                 y_hat_soft = model(x, lengths)
 
-            # loss = binary_cross_entropy_2classes(y_hat_soft[:, 0], y_hat_soft[:, 1], y, eps)
+            y_hat_soft = torch.squeeze(y_hat_soft)
+            loss = 0.
+            for (length, pred, target) in zip(lengths, y_hat_soft, y):
+                loss += binary_cross_entropy(pred[:length], target[:length])
+            loss /= len(lengths)
+            # loss = binary_cross_entropy(y_hat_soft, y, eps)
             
-            # y = torch.squeeze(y)
-            # loss = criterion(y_hat_soft, y)
-            
-            loss = binary_cross_entropy(y_hat_soft, y) #, eps)
-
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -208,9 +168,15 @@ def main():
             y_hat_soft = torch.sigmoid(y_hat_soft.detach())
             y_hat_hard = (y_hat_soft > 0.5).int()
 
-            # y_hat_hard = (y_hat_soft[:,0] > 0.5).int()
-
-            f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+            # exclude padding from F1-score
+            y_hat_hard_batch, y_batch = [], []
+            for (length, pred, target) in zip(lengths, y_hat_hard, y):
+                y_hat_hard_batch.append(pred[:length])
+                y_batch.append(target[:length])
+            y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
+            y_batch = torch.cat(y_batch[:length], axis=0)
+            # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+            f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=y_hat_hard_batch, y=y_batch, epsilon=eps)
             total_tp += tp.item()
             total_tn += tn.item()
             total_fp += fp.item()
@@ -240,35 +206,40 @@ def main():
 
             total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
             
-            # for batch_idx, (x, y) in enumerate(valid_loader):
             for batch_idx, (lengths, x, y) in tqdm(enumerate(valid_loader)):
 
                 if cuda:
-                    # x, y = x.to(device), y.long().to(device)
-                    # x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
-                    x, y, lengths = x.to(device), y.to(device), lengths.to(device)
+                    x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
 
-                # y_hat_soft = model(x)
                 # Normalize power spectrogram
                 if std_norm:
                     x_norm = x - mean.T
                     x_norm /= (std + eps).T
 
-                    y_hat_soft = model(x_norm, lengths, True) 
+                    y_hat_soft = model(x_norm, lengths) 
                 else:
-                    y_hat_soft = model(x, lengths, True)
+                    y_hat_soft = model(x, lengths)
                 
-                # y = torch.squeeze(y)
-                # loss = criterion(y_hat_soft, y)
-                
-                loss = binary_cross_entropy(y_hat_soft, y) #, eps)
+                y_hat_soft = torch.squeeze(y_hat_soft)
+                loss = 0.
+                for (length, pred, target) in zip(lengths, y_hat_soft, y):
+                    loss += binary_cross_entropy(pred[:length], target[:length])
+                loss /= len(lengths)
 
                 total_loss += loss.item()
                 # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
                 y_hat_soft = torch.sigmoid(y_hat_soft.detach())
                 y_hat_hard = (y_hat_soft > 0.5).int()
 
-                f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+                # exclude padding from F1-score
+                y_hat_hard_batch, y_batch = [], []
+                for (length, pred, target) in zip(lengths, y_hat_hard, y):
+                    y_hat_hard_batch.append(pred[:length])
+                    y_batch.append(target[:length])
+                y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
+                y_batch = torch.cat(y_batch[:length], axis=0)
+                # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+                f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=y_hat_hard_batch, y=y_batch, epsilon=eps)
                 total_tp += tp.item()
                 total_tn += tn.item()
                 total_fp += fp.item()
