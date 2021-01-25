@@ -25,8 +25,8 @@ if dataset_name == 'ntcd_timit':
 ## Dataset
 dataset_types = ['train', 'validation']
 
-dataset_size = 'subset'
-# dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 output_data_folder = 'export'
 
 # Labels

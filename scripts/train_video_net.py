@@ -25,6 +25,7 @@ dataset_size = 'complete'
 dataset_name = 'ntcd_timit'
 data_dir = 'export'
 labels = 'vad_labels'
+upsampled = True
 
 # System 
 cuda = torch.cuda.is_available()
@@ -65,19 +66,22 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_multigpu_align_shuffle_pretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_upsampled' + '.h5')
 
 #####################################################################################################
 
 print('Load data')
 train_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
-                                                     dataset_type='train')
+                                                     dataset_type='train',
+                                                     upsampled=upsampled)
 valid_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
-                                                     dataset_type='validation')
+                                                     dataset_type='validation',
+                                                     upsampled=upsampled)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 

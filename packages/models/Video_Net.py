@@ -14,8 +14,8 @@ class DeepVAD_video(nn.Module):
     def __init__(self, lstm_layers, lstm_hidden_size, batch_size):
         super(DeepVAD_video, self).__init__()
 
-        resnet = models.resnet18(pretrained=True) # set num_ftrs = 512
-        # resnet = models.resnet18(pretrained=False) # set num_ftrs = 512
+        # resnet = models.resnet18(pretrained=True) # set num_ftrs = 512
+        resnet = models.resnet18(pretrained=False) # set num_ftrs = 512
         # resnet = models.resnet34(pretrained=True) # set num_ftrs = 512
 
         num_ftrs = 512

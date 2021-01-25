@@ -15,7 +15,8 @@ import pickle
 Speech-related
 """
 def video_list(input_video_dir,
-                dataset_type='train'):
+                dataset_type='train',
+                upsampled=False):
     """
     Create clean speech + clean speech VAD
 
@@ -46,7 +47,10 @@ def video_list(input_video_dir,
     # List of files
     file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
     if not file_paths:
-        file_paths = sorted(glob(data_dir + '**/*.h5',recursive=True))
+        if upsampled:
+            file_paths = sorted(glob(data_dir + '**/*_upsampled.h5',recursive=True))
+        else:
+            file_paths = sorted(glob(data_dir + '**/*.h5',recursive=True))
 
     # Remove input_video_dir from file_paths
     file_paths = [os.path.relpath(path, input_video_dir) for path in file_paths]
