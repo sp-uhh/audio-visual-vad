@@ -126,6 +126,7 @@ def process_video(args):
                             '-preset': 'veryslow'}
     )
 
+    # Write and upsample video
     for frame in range(matlab_frames_list_per_user.shape[0]):
         rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
                                frame=frame,
