@@ -126,12 +126,12 @@ def process_video(args):
     
     # TODO: in parallel ?
     for frame in range(matlab_frames_list_per_user.shape[0]):
-        preprocess_ntcd_matlab(video_writer=out,
-                                matlab_frames=matlab_frames_list_per_user,
-                                frame=frame,
-                                width=width,
-                                height=height,
-                                y_hat_hard=y_hat_hard)
+        rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
+                               frame=frame,
+                               width=width,
+                               height=height,
+                               y_hat_hard=y_hat_hard)
+        out.write(rgb_rotated_df)
             
     # close out the video writer
     out.release()
