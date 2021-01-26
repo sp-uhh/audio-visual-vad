@@ -57,10 +57,10 @@ vad_quantile_fraction_end = 0.999
 vad_quantile_weight = 0.999
 
 # HDF5 parameters
-rdcc_nbytes = 1024**2*400 # The number of bytes to use for the chunk cache
+rdcc_nbytes = 1024**2*40 # The number of bytes to use for the chunk cache
                           # Default is 1 Mb
-                          # Here we are using 400Mb of chunk_cache_mem here
-rdcc_nslots = 1e5 # The number of slots in the cache's hash table
+                          # Here we are using 40Mb of chunk_cache_mem here
+rdcc_nslots = 1e4 # The number of slots in the cache's hash table
                   # Default is 521
                   # ideally 100 x number of chunks that can be fit in rdcc_nbytes
                   # (see https://docs.h5py.org/en/stable/high/file.html?highlight=rdcc#chunk-cache)
@@ -170,8 +170,11 @@ def process_write_video(args):
                                             quantile_weight=ibm_quantile_weight)
         label = speech_ibm
 
-    # Reduce frames of video
-    video = video[...,:label.shape[-1]]
+    # Reduce frames of video or label
+    if label.shape[-1] < video.shape[-1]:
+        video = video[...,:label.shape[-1]]
+    if label.shape[-1] > video.shape[-1]:
+        label = label[...,:video.shape[-1]]
 
     # Store data and label in h5_file
     output_h5_file = output_video_dir + mat_file_path
@@ -179,6 +182,9 @@ def process_write_video(args):
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
         os.makedirs(os.path.dirname(output_h5_file))
+
+    # Remove file if already exists
+    os.remove(output_h5_file)
 
     with h5.File(output_h5_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:    
         
@@ -241,7 +247,7 @@ def main():
             #     channels_sum += c_s
             #     channels_squared_sum += c_s_s
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
                 train_stats = executor.map(process_write_video, args)
             
             for (n_s, c_s, c_s_s) in train_stats:
@@ -277,7 +283,7 @@ def main():
             # for i, arg in tqdm(enumerate(args)):
             #     process_write_video(arg)
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=None) as executor:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
                 executor.map(process_write_video, args)
 
             t2 = time.perf_counter()
