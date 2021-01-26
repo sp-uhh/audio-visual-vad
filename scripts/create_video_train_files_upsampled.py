@@ -184,7 +184,8 @@ def process_write_video(args):
         os.makedirs(os.path.dirname(output_h5_file))
 
     # Remove file if already exists
-    os.remove(output_h5_file)
+    if os.path.exists(output_h5_file):
+        os.remove(output_h5_file)
 
     with h5.File(output_h5_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:    
         

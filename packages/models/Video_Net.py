@@ -50,8 +50,9 @@ class DeepVAD_video(nn.Module):
         try:
             batch, frames, channels, height, width = x.squeeze().size()
         except ValueError:
-            batch, channels, height, width = x.squeeze().size()
-            frames = 1
+            # When using DataParallel, batch might be equal to 1
+            frames, channels, height, width = x.squeeze().size() 
+            batch = 1
         
         # Reshape to (batch * seq_len, channels, height, width)
         x = x.view(batch*frames,channels,height,width)
