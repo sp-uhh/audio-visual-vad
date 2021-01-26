@@ -31,7 +31,7 @@ upsampled = True
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 32
+num_workers = 16
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -41,7 +41,6 @@ rdcc_nslots = 1e5 # The number of slots in the cache's hash table
                   # Default is 521
                   # ideally 100 x number of chunks that can be fit in rdcc_nbytes
                   # (see https://docs.h5py.org/en/stable/high/file.html?highlight=rdcc#chunk-cache)
-eps = 1e-8
 
 # Deep Generative Model
 x_dim = 513 
@@ -54,10 +53,10 @@ lstm_layers = 2
 lstm_hidden_size = 1024 
 batch_norm=False
 std_norm =True
-
+eps = 1e-8
 
 # Training
-batch_size = 64
+batch_size = 16
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -98,8 +97,8 @@ print('- Number of validation batches: {}'.format(len(valid_loader)))
 
 def main():
     print('Create model')
-    # model = VideoClassifier(lstm_layers, lstm_hidden_size, batch_size)
-    model = DeepVAD_video(lstm_layers, lstm_hidden_size, batch_size)
+    # model = VideoClassifier(lstm_layers, lstm_hidden_size)
+    model = DeepVAD_video(lstm_layers, lstm_hidden_size)
 
     if cuda: model = model.to(device)
 
@@ -145,7 +144,7 @@ def main():
         for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
             if cuda:
                 # x, y = x.to(device), y.long().to(device)
-                x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                x, y, lengths = x.to(device, non_blocking=non_blocking), y.long().to(device, non_blocking=non_blocking), lengths.to(device, non_blocking=non_blocking)
 
             # Normalize power spectrogram
             if std_norm:
@@ -213,7 +212,7 @@ def main():
             for batch_idx, (lengths, x, y) in tqdm(enumerate(valid_loader)):
 
                 if cuda:
-                    x, y, lengths = x.to(device), y.long().to(device), lengths.to(device)
+                    x, y, lengths = x.to(device, non_blocking=non_blocking), y.long().to(device, non_blocking=non_blocking), lengths.to(device, non_blocking=non_blocking)
 
                 # Normalize power spectrogram
                 if std_norm:
@@ -256,11 +255,12 @@ def main():
             print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score))
 
             # Save to log
-            print("[Validation] Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score),
+            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score),
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
 
             # Save model
-            torch.save(model.state_dict(), model_dir + '/' + 'Video_Net_epoch_{:03d}_vloss_{:.2f}.pt'.format(
+            # NB: if using DataParallel, save model as model.module.state_dict()
+            torch.save(model.module.state_dict(), model_dir + '/' + 'Video_Net_epoch_{:03d}_vloss_{:.2f}.pt'.format(
                 epoch, total_loss / m))
 
 if __name__ == '__main__':

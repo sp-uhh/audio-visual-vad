@@ -23,7 +23,8 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
 
 ## Dataset
-dataset_types = ['train', 'validation']
+# dataset_types = ['train', 'validation']
+dataset_types = ['test']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
@@ -277,7 +278,7 @@ def main():
                 f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
                 print('Mean and std saved in HDF5.')
 
-        if dataset_type == 'validation':
+        if dataset_type in ['validation', 'test']:
 
             t1 = time.perf_counter()
 

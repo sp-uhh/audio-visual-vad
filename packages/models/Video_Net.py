@@ -11,7 +11,7 @@ from torchvision import transforms
 # VIDEO only network
 class DeepVAD_video(nn.Module):
 
-    def __init__(self, lstm_layers, lstm_hidden_size, batch_size):
+    def __init__(self, lstm_layers, lstm_hidden_size):
         super(DeepVAD_video, self).__init__()
 
         # resnet = models.resnet18(pretrained=True) # set num_ftrs = 512
@@ -23,7 +23,6 @@ class DeepVAD_video(nn.Module):
         self.lstm_input_size = num_ftrs
         self.lstm_layers = lstm_layers
         self.lstm_hidden_size = lstm_hidden_size
-        self.batch_size = batch_size
 
         self.features = nn.Sequential(
             *list(resnet.children())[:-1]# drop the last FC layer
