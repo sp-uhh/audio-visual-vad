@@ -45,15 +45,13 @@ class DeepVAD_video(nn.Module):
         for m in self.named_parameters():
             weights_init_normal(m, mean=mean, std=std)
 
-    def forward(self, x, hidden, lengths, return_last=False):
-        if x.ndim == 5:
-            batch, frames, channels, height, width = x.size()
-        if x.ndim == 3:
-            # For stateful LSTM
-            channels, height, width = x.size() 
+    def forward(self, x, lengths, return_last=False):
+        try:
+            batch, frames, channels, height, width = x.squeeze().size()
+        except ValueError:
+            # When using DataParallel, batch might be equal to 1
+            frames, channels, height, width = x.squeeze().size() 
             batch = 1
-            frames = 1
-            lengths = [1]
         
         # Reshape to (batch * seq_len, channels, height, width)
         x = x.view(batch*frames,channels,height,width)
@@ -72,28 +70,30 @@ class DeepVAD_video(nn.Module):
         # Reshape to (batch , seq_len, Features)
         x = x.view(batch , frames, -1)
 
-        if x.ndim == 5:
-            # Pack the feature vector
-            # input_dim must be (batch, seq_len, Features)
-            total_length = x.size(1) # to make unpacking work with DataParallel
-            x = pack_padded_sequence(x, lengths=lengths, enforce_sorted=False, batch_first=True)
+        # Pack the feature vector
+        # input_dim must be (batch, seq_len, Features)
+        total_length = x.size(1) # to make unpacking work with DataParallel
+        x = pack_padded_sequence(x, lengths=lengths, enforce_sorted=False, batch_first=True)
 
-        out, hidden = self.lstm_video(x, hidden)  # output shape - seq len X Batch X lstm size
-        # out, _ = self.lstm_video(x)  # output shape - seq len X Batch X lstm size
+        # out, _ = self.lstm_video(x, h)  # output shape - seq len X Batch X lstm size
+        out, _ = self.lstm_video(x)  # output shape - seq len X Batch X lstm size
         
-        if x.ndim == 5:
-            # Unpack the feature vector & get last output
-            ##TODO: change and get the whole sequence
-            if return_last:
-                out = method3(out, lengths)
-                # out = method1(out)
-            else:
-                out, lens_unpacked = pad_packed_sequence(out, batch_first=True, total_length=total_length) # to make unpacking work with DataParallel
+        # Unpack the feature vector & get last output
+        ##TODO: change and get the whole sequence
+        if return_last:
+            out = method3(out, lengths)
+            # out = method1(out)
+        else:
+            out, lens_unpacked = pad_packed_sequence(out, batch_first=True, total_length=total_length) # to make unpacking work with DataParallel
 
         out = self.dropout(out)
         out = self.vad_video(out)
-        return out, hidden
+        return out
 
-    def init_hidden(self, device):
-        return (Variable(torch.zeros(self.lstm_layers, 1, self.lstm_hidden_size).to(device)),
-                Variable(torch.zeros(self.lstm_layers, 1, self.lstm_hidden_size).to(device)))
+    def init_hidden(self,is_train):
+        if is_train:
+            return (Variable(torch.zeros(self.lstm_layers, self.batch_size, self.lstm_hidden_size)).cuda(),
+                      Variable(torch.zeros(self.lstm_layers, self.batch_size, self.lstm_hidden_size)).cuda())
+        else:
+            return (Variable(torch.zeros(self.lstm_layers, self.test_batch_size, self.lstm_hidden_size)).cuda(),
+                    Variable(torch.zeros(self.lstm_layers, self.test_batch_size, self.lstm_hidden_size)).cuda())

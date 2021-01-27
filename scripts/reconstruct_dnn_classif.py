@@ -17,8 +17,8 @@ from packages.models.utils import f1_loss
 #from utils import count_parameters
 
 # Dataset
-dataset_size = 'subset'
-# dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
@@ -152,11 +152,8 @@ def main():
             x /= (std + eps).T
 
         # Classify
-        h = classifier.init_hidden(device)
-        y_hat_soft = torch.zeros_like(y)
-        for frame, x_frame in enumerate(x):
-            pred, h = classifier(x_frame, h, length)
-            y_hat_soft[...,frame] = pred
+        y_hat_soft = classifier(x, length)
+        #TODO: make it stateful
         y_hat_soft = torch.sigmoid(y_hat_soft)
         y_hat_hard = (y_hat_soft > 0.5).int()
         
@@ -188,8 +185,8 @@ def main():
     total_recall /= n_utt
     total_f1_score /= n_utt
 
-    print("[Test]       Accuracy: {:.2f}    Precision: {:.2f}    \
-    Recall: {:.2f}     F1_score: {:.2f}".format(total_accuracy, total_precision, total_recall, total_f1_score))
+    print("[Test]       Accuracy: {:.2f}    Precision: {:.2f}    \n"
+    "Recall: {:.2f}     F1_score: {:.2f}".format(total_accuracy, total_precision, total_recall, total_f1_score))
 
 if __name__ == '__main__':
     main()
