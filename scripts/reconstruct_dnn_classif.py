@@ -31,7 +31,7 @@ upsampled = True
 
 # System 
 cuda = torch.cuda.is_available()
-cuda_device = "cuda:0"
+cuda_device = "cuda:1"
 device = torch.device(cuda_device if cuda else "cpu")
 
 # Parameters
@@ -74,21 +74,22 @@ fontsize = 30
     # eps = 1e-8
 
 if labels == 'vad_labels':
-    classif_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_0.37'
+    classif_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_005_vloss_0.32'
     # x_dim = 513 # frequency bins (spectrogram)
     # y_dim = 1
     # h_dim_cl = [128, 128]
     lstm_layers = 2
-    lstm_hidden_size = 1024 
+    lstm_hidden_size = 1024
     std_norm = True
     batch_norm = False
     eps = 1e-8
 
 # Data directories
-processed_data_dir = os.path.join('data',dataset_size,'processed/')
+input_video_dir = os.path.join('data',dataset_size,'processed/')
+input_speech_dir = os.path.join('data',dataset_size,'raw/')
 classif_dir = os.path.join('models', classif_name + '.pt')
 classif_data_dir = os.path.join('data', dataset_size, 'models', classif_name + '/')
-output_h5_dir = processed_data_dir + os.path.join(dataset_name + '_statistics_upsampled' + '.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_upsampled' + '.h5')
 
 # Data normalization
 if std_norm:
@@ -121,7 +122,7 @@ def main():
                             dataset_type=dataset_type,
                             upsampled=upsampled)
 
-    audio_file_paths = speech_list(input_speech_dir=input_video_dir,
+    audio_file_paths = speech_list(input_speech_dir=input_speech_dir,
                             dataset_type=dataset_type)
 
     #TODO: compute f1-score
@@ -130,24 +131,27 @@ def main():
     for i, (mat_file_path, audio_file_paths) in tqdm(enumerate(zip(mat_file_paths, audio_file_paths))):
         
         # select utterance
-        h5_file_path = processed_data_dir + mat_file_path
+        h5_file_path = input_video_dir + mat_file_path
 
         # Open HDF5 file
         with h5.File(h5_file_path, 'r') as file:
             x = np.array(file["X"][:])
             y = np.array(file["Y"][:])
-            length = data.shape[-1]
+            length = [x.shape[-1]]
         
         x = torch.Tensor(x).to(device)
         y = torch.Tensor(y).to(device)
-                
+
+        # Transpose to match PyTorch
+        x = x.T # (frames,channels,width,height)
+
         # Normalize power spectrogram
         if std_norm:
             x -= mean.T
             x /= (std + eps).T
 
         # Classify
-        y_hat_soft = classifier(x)
+        y_hat_soft = classifier(x, length)
         #TODO: make it stateful
         y_hat_soft = torch.sigmoid(y_hat_soft)
         y_hat_hard = (y_hat_soft > 0.5).int()
@@ -156,7 +160,7 @@ def main():
         f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
 
         # Output file
-        output_path = classif_data_dir + file_path
+        output_path = classif_data_dir + mat_file_path
         output_path = os.path.splitext(output_path)[0]
 
         if not os.path.exists(os.path.dirname(output_path)):

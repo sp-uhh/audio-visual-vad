@@ -43,8 +43,8 @@ def collate_many2many(batch):
     lengths = [i[2] for i in batch]   # get the length of each sequence in the batch
     batch_size = len(batch)
     seq_length = max(lengths)
-    width, height, channel, _ = batch[0][0].size()
-    padded_data = torch.zeros((batch_size, width, height, channel, seq_length))
+    height, width, channel, _ = batch[0][0].size()
+    padded_data = torch.zeros((batch_size, height, width, channel, seq_length))
     target = torch.zeros((batch_size, seq_length))
     for idx, (sample, length) in enumerate(zip(batch, lengths)):
         # Padd sequence at beginning
@@ -63,7 +63,7 @@ def collate_many2many(batch):
     target = torch.squeeze(target)
 
     # Swap channels and width
-    padded_data = padded_data.permute(0,1,-1,3,2) # batch,frames,channels,height,width
+    padded_data = padded_data.permute(0,1,-1,3,2) # batch,frames,channels,width,height
 
     # Make dim contiguous
     padded_data = padded_data.contiguous()
