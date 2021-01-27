@@ -17,8 +17,8 @@ from packages.models.utils import f1_loss
 #from utils import count_parameters
 
 # Dataset
-dataset_size = 'subset'
-#dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
@@ -125,7 +125,8 @@ def main():
     audio_file_paths = speech_list(input_speech_dir=input_speech_dir,
                             dataset_type=dataset_type)
 
-    #TODO: compute f1-score
+    #Init variables to compute f1-score
+    total_accuracy, total_precision, total_recall, total_f1_score = (0., 0., 0., 0.)
 
     #TODO: paralllelize over 4 GPUs
     for i, (mat_file_path, audio_file_paths) in tqdm(enumerate(zip(mat_file_paths, audio_file_paths))):
@@ -157,7 +158,11 @@ def main():
         y_hat_hard = (y_hat_soft > 0.5).int()
         
         # F1-score
-        f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+        accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+        total_accuracy += accuracy
+        total_precision += precision
+        total_recall+= recall
+        total_f1_score += f1_score
 
         # Output file
         output_path = classif_data_dir + mat_file_path
@@ -172,6 +177,16 @@ def main():
 
         np.save(output_path + '_y_hat_soft.npy', y_hat_soft)
         np.save(output_path + '_y_hat_hard.npy', y_hat_hard)
+    
+    # Compute total accuracy, precision, recall, F1-score
+    n_utt = len(mat_file_paths)
+    total_accuracy /= n_utt
+    total_precision /= n_utt
+    total_recall /= n_utt
+    total_f1_score /= n_utt
+
+    print("[Test]       Accuracy: {:.2f}    Precision: {:.2f}    \n"
+    "Recall: {:.2f}     F1_score: {:.2f}".format(total_accuracy, total_precision, total_recall, total_f1_score))
 
 if __name__ == '__main__':
     main()

@@ -174,16 +174,10 @@ def main():
             # exclude padding from F1-score
             y_hat_hard_batch, y_batch = [], []
             for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                y_hat_hard_batch.append(pred[:length])
-                y_batch.append(target[:length])
-            y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
-            y_batch = torch.cat(y_batch[:length], axis=0)
+                accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=pred[:length], y=target[:length], epsilon=eps)
+                total_f1_score += f1_score
+            total_f1_score /= len(y_hat_hard)
             # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
-            f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=y_hat_hard_batch, y=y_batch, epsilon=eps)
-            total_tp += tp.item()
-            total_tn += tn.item()
-            total_fp += fp.item()
-            total_fn += fn.item()
 
             # Save to log
             if batch_idx % log_interval == 0:
@@ -194,17 +188,12 @@ def main():
 
         if epoch % 1 == 0:
             model.eval()
-
-            total_precision = total_tp / (total_tp + total_fp + eps)
-            total_recall = total_tp / (total_tp + total_fn + eps) 
-            total_f1_score = 2 * (total_precision * total_recall) / (total_precision + total_recall + eps)
-
             print("Epoch: {}".format(epoch))
-            print("[Train]       Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / t, total_f1_score))
+            print("[Train]       Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / t, total_f1_score / t))
 
             # Save to log
             print(("Epoch: {}".format(epoch)), file=open(model_dir + '/' + 'output_epoch.log','a'))
-            print("[Train]       Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / t, total_f1_score),
+            print("[Train]       Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / t, total_f1_score / t),
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
 
             total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
@@ -237,25 +226,15 @@ def main():
                 # exclude padding from F1-score
                 y_hat_hard_batch, y_batch = [], []
                 for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                    y_hat_hard_batch.append(pred[:length])
-                    y_batch.append(target[:length])
-                y_hat_hard_batch = torch.cat(y_hat_hard_batch, axis=0)
-                y_batch = torch.cat(y_batch[:length], axis=0)
+                    accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=pred[:length], y=target[:length], epsilon=eps)
+                    total_f1_score += f1_score
+                total_f1_score /= len(y_hat_hard)
                 # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
-                f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=y_hat_hard_batch, y=y_batch, epsilon=eps)
-                total_tp += tp.item()
-                total_tn += tn.item()
-                total_fp += fp.item()
-                total_fn += fn.item()
 
-            total_precision = total_tp / (total_tp + total_fp + eps)
-            total_recall = total_tp / (total_tp + total_fn + eps) 
-            total_f1_score = 2 * (total_precision * total_recall) / (total_precision + total_recall + eps)
-
-            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score))
+            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score / t))
 
             # Save to log
-            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score),
+            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score / t),
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
 
             # Save model
