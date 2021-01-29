@@ -17,8 +17,8 @@ from packages.models.utils import f1_loss
 #from utils import count_parameters
 
 # Dataset
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
@@ -51,17 +51,6 @@ visual_frame_rate_i = 30 # initial visual frames per second
 visual_frame_rate_o = 1 / (wlen_sec * hop_percent)
 width = 67
 height = 67
-crf = 0 #set the constant rate factor to 0, which is lossless
-
-## IBM
-quantile_fraction = 0.999
-quantile_weight = 0.999
-
-## Plot spectrograms
-vmin = -40 # in dB
-vmax = 20 # in dB
-xticks_sec = 2.0 # in seconds
-fontsize = 30
 
 ## Classifier
 # if labels == 'labels':
@@ -91,17 +80,19 @@ classif_dir = os.path.join('models', classif_name + '.pt')
 classif_data_dir = os.path.join('data', dataset_size, 'models', classif_name + '/')
 output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_upsampled' + '.h5')
 
-# Data normalization
-if std_norm:
-    print('Load mean and std')
-    with h5.File(output_h5_dir, 'r') as file:
-        mean = file['X_train_mean'][:]
-        std = file['X_train_std'][:]
-
-    mean = torch.tensor(mean).to(device)
-    std = torch.tensor(std).to(device)
+#############################################################
 
 def main():
+
+    # Data normalization
+    if std_norm:
+        print('Load mean and std')
+        with h5.File(output_h5_dir, 'r') as file:
+            mean = file['X_train_mean'][:]
+            std = file['X_train_std'][:]
+
+        mean = torch.tensor(mean).to(device)
+        std = torch.tensor(std).to(device)
 
     # Log file
     file = open('output.log','w') 
@@ -129,7 +120,7 @@ def main():
     total_accuracy, total_precision, total_recall, total_f1_score = (0., 0., 0., 0.)
 
     #TODO: paralllelize over 4 GPUs
-    for i, (mat_file_path, audio_file_paths) in tqdm(enumerate(zip(mat_file_paths, audio_file_paths))):
+    for i, (mat_file_path, audio_file_path) in tqdm(enumerate(zip(mat_file_paths, audio_file_paths))):
         
         # select utterance
         h5_file_path = input_video_dir + mat_file_path
@@ -153,8 +144,8 @@ def main():
 
         # Classify
         y_hat_soft = classifier(x, length)
-        #TODO: make it stateful
         y_hat_soft = torch.sigmoid(y_hat_soft)
+        y_hat_soft = y_hat_soft[...,0] # Reduce last dimension
         y_hat_hard = (y_hat_soft > 0.5).int()
         
         # F1-score
@@ -175,6 +166,7 @@ def main():
         y_hat_soft = y_hat_soft.cpu().numpy()
         y_hat_hard = y_hat_hard.cpu().numpy()
 
+        #TODO: save y_hat_soft as json?
         np.save(output_path + '_y_hat_soft.npy', y_hat_soft)
         np.save(output_path + '_y_hat_hard.npy', y_hat_hard)
     
