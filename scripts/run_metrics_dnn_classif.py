@@ -214,9 +214,8 @@ def compute_metrics_utt(args):
                         xticks_sec=xticks_sec, fontsize=fontsize)
     
     # put all metrics in the title of the figure
-    #TODO: modify
-    title = "Input SNR = {:.1f} dB \n" \
-        "F1-score = {:.3f} \n".format(accuracy, precision, recall,f1_score)
+    title = "Accuracy = {:.3f}  Precision = {:.3f}  \n" \
+        "Recall = {:.3f}  F1-score = {:.3f} \n".format(accuracy, precision, recall,f1_score)
 
     fig.suptitle(title, fontsize=40)
 
