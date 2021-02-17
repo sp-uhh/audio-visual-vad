@@ -15,7 +15,7 @@ import time
 
 from packages.processing.stft import stft
 from packages.processing.video import preprocess_ntcd_matlab
-from packages.processing.target import noise_robust_clean_speech_VAD # because clean audio is very noisy
+from packages.processing.target import noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
 
 # Parameters
 dataset_name = 'ntcd_timit'
@@ -23,16 +23,16 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
 
 ## Dataset
-# dataset_types = ['train', 'validation']
-dataset_types = ['test']
+dataset_types = ['train', 'validation']
+# dataset_types = ['test']
 
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 output_data_folder = 'export'
 
 # Labels
-labels = 'vad_labels'
-# labels = 'ibm_labels'
+# labels = 'vad_labels'
+labels = 'ibm_labels'
 
 ## STFT
 fs = int(16e3) # Sampling rate
@@ -57,6 +57,12 @@ vad_quantile_fraction_begin = 0.93
 vad_quantile_fraction_end = 0.999
 vad_quantile_weight = 0.999
 
+## Noise robust IBM
+vad_quantile_fraction_begin = 0.93
+vad_quantile_fraction_end = 0.999
+ibm_quantile_fraction = 0.999
+ibm_quantile_weight = 0.999
+
 # HDF5 parameters
 rdcc_nbytes = 1024**2*40 # The number of bytes to use for the chunk cache
                           # Default is 1 Mb
@@ -72,9 +78,14 @@ X_shape = (height, width, 3, 0)
 X_maxshape = (height, width, 3, None)
 X_chunks = (height, width, 3, 1)
 
-Y_shape = (1, 0)
-Y_maxshape = (1, None)
-Y_chunks = (1, 1)
+if labels == 'vad_labels':
+    y_dim = 1
+if labels == 'ibm_labels':
+    y_dim = 513
+
+Y_shape = (y_dim, 0)
+Y_maxshape = (y_dim, None)
+Y_chunks = (y_dim, 1)
 compression = 'lzf'
 
 # Data directories
@@ -179,7 +190,7 @@ def process_write_video(args):
 
     # Store data and label in h5_file
     output_h5_file = output_video_dir + mat_file_path
-    output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '_upsampled.h5'
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
         os.makedirs(os.path.dirname(output_h5_file))
