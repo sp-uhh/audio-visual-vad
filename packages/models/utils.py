@@ -107,7 +107,8 @@ def log_sum_exp(tensor, dim=-1, sum_op=torch.sum):
 def binary_cross_entropy(r, x): #, eps):
     # return -torch.mean(torch.sum(x*torch.log(r + eps) + (1 - x)*torch.log(1 - r + eps), dim=-1))
     # return -torch.mean(torch.sum(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1))
-    return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1)
+    # return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1)
+    return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r))) # Average over (T,*)
 
 def binary_cross_entropy_2classes(r1, r2, x, eps):
     return -torch.mean(torch.sum(x*torch.log(r1 + eps) + (1 - x)*torch.log(r2 + eps), dim=-1))

@@ -91,7 +91,7 @@ compression = 'lzf'
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'raw/')
 output_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_dataset_file = output_video_dir + os.path.join(dataset_name + '_statistics_upsampled' + '.h5')
+output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
 
 def process_write_video(args):
     # Separate args

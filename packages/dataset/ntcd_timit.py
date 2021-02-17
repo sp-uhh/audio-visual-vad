@@ -16,6 +16,7 @@ Speech-related
 """
 def video_list(input_video_dir,
                 dataset_type='train',
+                labels='vad_labels',
                 upsampled=False):
     """
     Create clean speech + clean speech VAD
@@ -48,9 +49,9 @@ def video_list(input_video_dir,
     file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
     if not file_paths:
         if upsampled:
-            file_paths = sorted(glob(data_dir + '**/*_upsampled.h5',recursive=True))
+            file_paths = sorted(glob(data_dir + '**/*' + '_' + labels + '_upsampled.h5',recursive=True))
         else:
-            file_paths = sorted(glob(data_dir + '**/*.h5',recursive=True))
+            file_paths = sorted(glob(data_dir + + '**/*' + '_' + labels + '.h5',recursive=True))
 
     # Remove input_video_dir from file_paths
     file_paths = [os.path.relpath(path, input_video_dir) for path in file_paths]

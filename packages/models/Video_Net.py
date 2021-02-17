@@ -11,7 +11,7 @@ from torchvision import transforms
 # VIDEO only network
 class DeepVAD_video(nn.Module):
 
-    def __init__(self, lstm_layers, lstm_hidden_size):
+    def __init__(self, lstm_layers, lstm_hidden_size, y_dim):
         super(DeepVAD_video, self).__init__()
 
         # resnet = models.resnet18(pretrained=True) # set num_ftrs = 512
@@ -23,6 +23,7 @@ class DeepVAD_video(nn.Module):
         self.lstm_input_size = num_ftrs
         self.lstm_layers = lstm_layers
         self.lstm_hidden_size = lstm_hidden_size
+        self.y_dim = y_dim
 
         self.features = nn.Sequential(
             *list(resnet.children())[:-1]# drop the last FC layer
@@ -38,7 +39,7 @@ class DeepVAD_video(nn.Module):
                             bidirectional=False)
 
         # self.vad_video = nn.Linear(self.lstm_hidden_size, 2)
-        self.vad_video = nn.Linear(self.lstm_hidden_size, 1)
+        self.vad_video = nn.Linear(self.lstm_hidden_size, y_dim)
         self.dropout = nn.Dropout(p=0.5)
 
     def weight_init(self, mean=0.0, std=0.02):
@@ -46,13 +47,8 @@ class DeepVAD_video(nn.Module):
             weights_init_normal(m, mean=mean, std=std)
 
     def forward(self, x, lengths, return_last=False):
-        try:
-            batch, frames, channels, height, width = x.squeeze().size()
-        except ValueError:
-            # When using DataParallel, batch might be equal to 1
-            frames, channels, height, width = x.squeeze().size() 
-            batch = 1
-        
+        batch, frames, channels, height, width = x.size()
+
         # Reshape to (batch * seq_len, channels, height, width)
         x = x.view(batch*frames,channels,height,width)
         

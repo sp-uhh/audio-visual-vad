@@ -19,19 +19,22 @@ from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2cl
 from packages.utils import count_parameters, my_collate, collate_many2many
 
 # Dataset
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
 data_dir = 'export'
-labels = 'vad_labels'
 upsampled = True
+
+# Labels
+# labels = 'vad_labels'
+labels = 'ibm_labels'
 
 # System 
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 16
+num_workers = 0
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -44,10 +47,10 @@ rdcc_nslots = 1e5 # The number of slots in the cache's hash table
 
 # Deep Generative Model
 x_dim = 513 
-if labels == 'noisy_labels':
-    y_dim = 513
-if labels == 'noisy_vad_labels':
+if labels == 'vad_labels':
     y_dim = 1
+if labels == 'ibm_labels':
+    y_dim = 513
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
@@ -56,7 +59,7 @@ std_norm =True
 eps = 1e-8
 
 # Training
-batch_size = 16
+batch_size = 2
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -65,27 +68,33 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+
+if labels == 'ibm_labels':
+    model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
-output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_upsampled' + '.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
 
 #####################################################################################################
 
 print('Load data')
 train_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
                                                      dataset_type='train',
+                                                     labels=labels,
                                                      upsampled=upsampled)
 valid_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
                                                      dataset_type='validation',
+                                                     labels=labels,
                                                      upsampled=upsampled)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many)
 
@@ -98,13 +107,13 @@ print('- Number of validation batches: {}'.format(len(valid_loader)))
 def main():
     print('Create model')
     # model = VideoClassifier(lstm_layers, lstm_hidden_size)
-    model = DeepVAD_video(lstm_layers, lstm_hidden_size)
+    model = DeepVAD_video(lstm_layers, lstm_hidden_size, y_dim)
 
     if cuda: model = model.to(device)
 
-    model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    # model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
 
-    if cuda: model = model.to(device)
+    # if cuda: model = model.to(device)
 
     # Create model folder
     model_dir = os.path.join('models', model_name)
@@ -130,7 +139,8 @@ def main():
 
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
-    criterion = nn.CrossEntropyLoss().to(device) # Ignore padding in the loss
+    # criterion = nn.CrossEntropyLoss().to(device) # Ignore padding in the loss
+
 
     t = len(train_loader)
     m = len(valid_loader)
@@ -139,7 +149,7 @@ def main():
     print('Start training')
     for epoch in range(start_epoch, end_epoch):
         model.train()
-        total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
+        total_loss, total_accuracy, total_precision, total_recall, total_f1_score = (0, 0, 0, 0, 0)
         # for batch_idx, (x, y) in enumerate(train_loader):
         for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
             if cuda:
@@ -155,7 +165,7 @@ def main():
             else:
                 y_hat_soft = model(x, lengths)
 
-            y_hat_soft = torch.squeeze(y_hat_soft)
+            # y_hat_soft = torch.squeeze(y_hat_soft)
             loss = 0.
             for (length, pred, target) in zip(lengths, y_hat_soft, y):
                 loss += binary_cross_entropy(pred[:length], target[:length])
@@ -174,29 +184,39 @@ def main():
             # exclude padding from F1-score
             y_hat_hard_batch, y_batch = [], []
             for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=pred[:length], y=target[:length], epsilon=eps)
+                accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=torch.flatten(pred[:length]),
+                                                                y=torch.flatten(target[:length]),
+                                                                epsilon=eps)
+                total_accuracy += accuracy
+                total_precision += precision
+                total_recall += recall
                 total_f1_score += f1_score
-            total_f1_score /= len(y_hat_hard)
+            total_accuracy /= len(lengths)
+            total_precision /= len(lengths)
+            total_recall /= len(lengths)
+            total_f1_score /= len(lengths)
             # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
 
             # Save to log
             if batch_idx % log_interval == 0:
-                print(('Train Epoch: {:2d}   [{:4d}/{:4d} ({:2d}%)]    Loss: {:.2f}    F1-score.: {:.2f}'\
+                print(('Train Epoch: {:2d}   [{:4d}/{:4d} ({:2d}%)]    Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1-score.: {:.2f}'\
                     + '').format(epoch, batch_idx*len(x), len(train_loader.dataset), int(100.*batch_idx/len(train_loader)),\
-                            loss.item(), f1_score.item()), 
+                            loss.item(), accuracy.item(), precision.item(), recall.item(), f1_score.item()), 
                     file=open(model_dir + '/' + 'output_batch.log','a'))
 
         if epoch % 1 == 0:
             model.eval()
             print("Epoch: {}".format(epoch))
-            print("[Train]       Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / t, total_f1_score / t))
+            print(("[Train]       Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1_score: {:.2f}"\
+                + '').format(total_loss / t, total_accuracy / t, total_precision / t, total_recall / t, total_f1_score / t))
 
             # Save to log
             print(("Epoch: {}".format(epoch)), file=open(model_dir + '/' + 'output_epoch.log','a'))
-            print("[Train]       Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / t, total_f1_score / t),
+            print(("[Train]       Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1_score: {:.2f}"\
+                + '').format(total_loss / t, total_accuracy / t, total_precision / t, total_recall / t, total_f1_score / t),
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
-
-            total_loss, total_tp, total_tn, total_fp, total_fn = (0, 0, 0, 0, 0)
+            
+            total_loss, total_accuracy, total_precision, total_recall, total_f1_score = (0, 0, 0, 0, 0)
             
             for batch_idx, (lengths, x, y) in tqdm(enumerate(valid_loader)):
 
@@ -212,7 +232,7 @@ def main():
                 else:
                     y_hat_soft = model(x, lengths)
                 
-                y_hat_soft = torch.squeeze(y_hat_soft)
+                # y_hat_soft = torch.squeeze(y_hat_soft)
                 loss = 0.
                 for (length, pred, target) in zip(lengths, y_hat_soft, y):
                     loss += binary_cross_entropy(pred[:length], target[:length])
@@ -226,21 +246,35 @@ def main():
                 # exclude padding from F1-score
                 y_hat_hard_batch, y_batch = [], []
                 for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                    accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=pred[:length], y=target[:length], epsilon=eps)
+                    accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=torch.flatten(pred[:length]),
+                                                                    y=torch.flatten(target[:length]),
+                                                                    epsilon=eps)
+                    total_accuracy += accuracy
+                    total_precision += precision
+                    total_recall += recall
                     total_f1_score += f1_score
-                total_f1_score /= len(y_hat_hard)
+                total_accuracy /= len(lengths)
+                total_precision /= len(lengths)
+                total_recall /= len(lengths)
+                total_f1_score /= len(lengths)
                 # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
 
-            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score / t))
+            print(("[Validation]  Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1_score: {:.2f}"\
+                + '').format(total_loss / m, total_accuracy / m, total_precision / m, total_recall / m, total_f1_score / m))
 
             # Save to log
-            print("[Validation]  Loss: {:.2f}    F1_score: {:.2f}".format(total_loss / m, total_f1_score / t),
+            print(("[Validation]  Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1_score: {:.2f}"\
+                + '').format(total_loss / m, total_accuracy / m, total_precision / m, total_recall / m, total_f1_score / m),
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
 
             # Save model
             # NB: if using DataParallel, save model as model.module.state_dict()
-            torch.save(model.module.state_dict(), model_dir + '/' + 'Video_Net_epoch_{:03d}_vloss_{:.2f}.pt'.format(
-                epoch, total_loss / m))
+            if hasattr(model, 'module'):
+                torch.save(model.module.state_dict(), model_dir + '/' + 'Video_Net_epoch_{:03d}_vloss_{:.2f}.pt'.format(
+                    epoch, total_loss / m))
+            else:
+                torch.save(model.state_dict(), model_dir + '/' + 'Video_Net_epoch_{:03d}_vloss_{:.2f}.pt'.format(
+                    epoch, total_loss / m))
 
 if __name__ == '__main__':
     main()
