@@ -18,8 +18,9 @@ class DeepVAD_video(nn.Module):
         resnet = models.resnet18(pretrained=False) # set num_ftrs = 512
         # resnet = models.resnet34(pretrained=True) # set num_ftrs = 512
 
-        num_ftrs = 512
+        # num_ftrs = 512
         # num_ftrs = 13467
+        num_ftrs = 4489
 
         self.lstm_input_size = num_ftrs
         self.lstm_layers = lstm_layers
@@ -48,10 +49,12 @@ class DeepVAD_video(nn.Module):
             weights_init_normal(m, mean=mean, std=std)
 
     def forward(self, x, lengths, return_last=False):
-        batch, frames, channels, height, width = x.size()
+        # batch, frames, channels, height, width = x.size()
+        batch, frames, height, width = x.size()
 
         # Reshape to (batch * seq_len, channels, height, width)
-        x = x.view(batch*frames,channels,height,width)
+        # x = x.view(batch*frames,channels,height,width)
+        x = x.view(batch*frames,height,width)
         
         # # Normalize input data the same way ResNet was pretrained
         # # Set images in range [0,1]
@@ -62,8 +65,8 @@ class DeepVAD_video(nn.Module):
         # x -= self.mean[None,:, None, None].to(x.device)
         # x /= self.std[None,:, None, None].to(x.device)
 
-        x = self.features(x).squeeze() # output shape - Batch X Features X seq len
-        x = self.dropout(x)
+        # x = self.features(x).squeeze() # output shape - Batch X Features X seq len
+        # x = self.dropout(x)
         # Reshape to (batch , seq_len, Features)
         x = x.view(batch , frames, -1)
 

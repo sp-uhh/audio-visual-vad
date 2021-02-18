@@ -74,13 +74,14 @@ if labels == 'vad_labels':
 if labels == 'ibm_labels':
     # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'Video_Classifier_ibm_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_ibm_ntcd_features_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_ibm_ntcd_features_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_ibm_1channel_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
-# output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
-output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
 
 #####################################################################################################
 

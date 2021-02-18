@@ -2,7 +2,7 @@ from scipy.fftpack import idct
 import cv2
 import numpy as np
 
-def preprocess_ntcd_matlab(matlab_frames, frame, width, height, y_hat_hard=None):
+def preprocess_ntcd_matlab(matlab_frames, frame, width, height, y_hat_hard=None, output_video=True):
     data_frame = matlab_frames[frame]  # data frame will be shortened to "df" below
     reshaped_df = data_frame.reshape(width, height)
     idct_df = idct(idct(reshaped_df).T).T
@@ -14,6 +14,7 @@ def preprocess_ntcd_matlab(matlab_frames, frame, width, height, y_hat_hard=None)
     if y_hat_hard is not None and y_hat_hard[frame] == 1:
         rotated_df[-9:,-9:] = 9*[255] # white square
 
+    # Duplicate channel to visualize video
     rgb_rotated_df = cv2.merge([rotated_df] * 3)
 
     return rgb_rotated_df
