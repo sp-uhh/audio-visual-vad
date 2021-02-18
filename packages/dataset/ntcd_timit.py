@@ -49,7 +49,8 @@ def video_list(input_video_dir,
     file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
     if not file_paths:
         if upsampled:
-            file_paths = sorted(glob(data_dir + '**/*' + '_' + labels + '_upsampled.h5',recursive=True))
+            # file_paths = sorted(glob(data_dir + '**/*' + '_' + labels + '_upsampled.h5',recursive=True))
+            file_paths = sorted(glob(data_dir + '**/*' + '_' + 'ntcd_proc' + '_' + labels + '_upsampled.h5',recursive=True))
         else:
             file_paths = sorted(glob(data_dir + + '**/*' + '_' + labels + '.h5',recursive=True))
 

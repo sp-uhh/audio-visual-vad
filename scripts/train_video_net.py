@@ -19,8 +19,8 @@ from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2cl
 from packages.utils import count_parameters, my_collate, collate_many2many
 
 # Dataset
-dataset_size = 'subset'
-# dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
 data_dir = 'export'
@@ -34,7 +34,7 @@ labels = 'ibm_labels'
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
-num_workers = 0
+num_workers = 16
 pin_memory = True
 non_blocking = True
 rdcc_nbytes = 1024**2*400  # The number of bytes to use for the chunk cache
@@ -59,7 +59,7 @@ std_norm =True
 eps = 1e-8
 
 # Training
-batch_size = 2
+batch_size = 16
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -72,12 +72,15 @@ if labels == 'vad_labels':
     model_name = 'Video_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
-    model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_ibm_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_ibm_ntcd_features_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
-output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
 
 #####################################################################################################
 
@@ -111,9 +114,9 @@ def main():
 
     if cuda: model = model.to(device)
 
-    # model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
 
-    # if cuda: model = model.to(device)
+    if cuda: model = model.to(device)
 
     # Create model folder
     model_dir = os.path.join('models', model_name)
@@ -169,7 +172,7 @@ def main():
             loss = 0.
             for (length, pred, target) in zip(lengths, y_hat_soft, y):
                 loss += binary_cross_entropy(pred[:length], target[:length])
-            loss /= len(lengths)
+            # loss /= len(lengths)
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
             
             loss.backward()
@@ -183,19 +186,24 @@ def main():
 
             # exclude padding from F1-score
             y_hat_hard_batch, y_batch = [], []
+            accuracy, precision, recall, f1_score = 0., 0., 0., 0.
             for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=torch.flatten(pred[:length]),
+                acc, prec, rec, f1 = f1_loss(y_hat_hard=torch.flatten(pred[:length]),
                                                                 y=torch.flatten(target[:length]),
                                                                 epsilon=eps)
-                total_accuracy += accuracy
-                total_precision += precision
-                total_recall += recall
-                total_f1_score += f1_score
-            total_accuracy /= len(lengths)
-            total_precision /= len(lengths)
-            total_recall /= len(lengths)
-            total_f1_score /= len(lengths)
-            # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+                accuracy += acc
+                precision += prec
+                recall += rec
+                f1_score += f1
+            accuracy /= len(lengths)
+            precision /= len(lengths)
+            recall /= len(lengths)
+            f1_score /= len(lengths)
+
+            total_accuracy += accuracy
+            total_precision += precision
+            total_recall += recall
+            total_f1_score += f1_score
 
             # Save to log
             if batch_idx % log_interval == 0:
@@ -236,7 +244,7 @@ def main():
                 loss = 0.
                 for (length, pred, target) in zip(lengths, y_hat_soft, y):
                     loss += binary_cross_entropy(pred[:length], target[:length])
-                loss /= len(lengths)
+                # loss /= len(lengths)
 
                 total_loss += loss.item()
                 # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
@@ -245,19 +253,24 @@ def main():
 
                 # exclude padding from F1-score
                 y_hat_hard_batch, y_batch = [], []
+                accuracy, precision, recall, f1_score = 0., 0., 0., 0.
                 for (length, pred, target) in zip(lengths, y_hat_hard, y):
-                    accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=torch.flatten(pred[:length]),
+                    acc, prec, rec, f1 = f1_loss(y_hat_hard=torch.flatten(pred[:length]),
                                                                     y=torch.flatten(target[:length]),
                                                                     epsilon=eps)
-                    total_accuracy += accuracy
-                    total_precision += precision
-                    total_recall += recall
-                    total_f1_score += f1_score
-                total_accuracy /= len(lengths)
-                total_precision /= len(lengths)
-                total_recall /= len(lengths)
-                total_f1_score /= len(lengths)
-                # f1_score, tp, tn, fp, fn = f1_loss(y_hat_hard=torch.flatten(y_hat_hard), y=torch.flatten(y), epsilon=eps)
+                    accuracy += acc
+                    precision += prec
+                    recall += rec
+                    f1_score += f1
+                accuracy /= len(lengths)
+                precision /= len(lengths)
+                recall /= len(lengths)
+                f1_score /= len(lengths)
+
+                total_accuracy += accuracy
+                total_precision += precision
+                total_recall += recall
+                total_f1_score += f1_score
 
             print(("[Validation]  Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1_score: {:.2f}"\
                 + '').format(total_loss / m, total_accuracy / m, total_precision / m, total_recall / m, total_f1_score / m))

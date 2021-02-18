@@ -19,6 +19,7 @@ class DeepVAD_video(nn.Module):
         # resnet = models.resnet34(pretrained=True) # set num_ftrs = 512
 
         num_ftrs = 512
+        # num_ftrs = 13467
 
         self.lstm_input_size = num_ftrs
         self.lstm_layers = lstm_layers

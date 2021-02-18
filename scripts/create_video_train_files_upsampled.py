@@ -26,8 +26,8 @@ if dataset_name == 'ntcd_timit':
 dataset_types = ['train', 'validation']
 # dataset_types = ['test']
 
-dataset_size = 'subset'
-# dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 output_data_folder = 'export'
 
 # Labels
@@ -91,7 +91,8 @@ compression = 'lzf'
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'raw/')
 output_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
+# output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
+output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
 
 def process_write_video(args):
     # Separate args
@@ -133,36 +134,40 @@ def process_write_video(args):
         for key, value in vfile.items():
             matlab_frames_list_per_user = np.array(value)
     
-    # Process video
-    # Create temporary file for video upsampling
-    with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
+    # # Process video
+    # # Create temporary file for video upsampling
+    # with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
 
-        # initialize video writer
-        out = skvideo.io.FFmpegWriter(tmp.name,
-                    inputdict={'-r': str(visual_frame_rate_i),
-                            '-s':'{}x{}'.format(width,height)},
-                    outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
-                                '-c:v': 'libx264',
-                                '-crf': str(crf),
-                                '-preset': 'veryslow'}
-        )
+    #     # initialize video writer
+    #     out = skvideo.io.FFmpegWriter(tmp.name,
+    #                 inputdict={'-r': str(visual_frame_rate_i),
+    #                         '-s':'{}x{}'.format(width,height)},
+    #                 outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+    #                             '-c:v': 'libx264',
+    #                             '-crf': str(crf),
+    #                             '-preset': 'veryslow'}
+    #     )
         
-        # Write and upsample video
-        for frame in range(matlab_frames_list_per_user.shape[0]):
-            rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
-                                frame=frame,
-                                width=width,
-                                height=height,
-                                y_hat_hard=None)
-            out.writeFrame(rgb_rotated_df)
+    #     # Write and upsample video
+    #     for frame in range(matlab_frames_list_per_user.shape[0]):
+    #         rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
+    #                             frame=frame,
+    #                             width=width,
+    #                             height=height,
+    #                             y_hat_hard=None)
+    #         out.writeFrame(rgb_rotated_df)
                 
-        # close out the video writer
-        out.close()
+    #     # close out the video writer
+    #     out.close()
         
-        # Read upsampled video
-        video = skvideo.io.vread(tmp.name) # (frames, height, width, channel)
-        video = np.moveaxis(video, 0,-1) # (height, width, channel, frames)
-        video = np.float32(video) #convert to float32
+        # # Read upsampled video
+        # video = skvideo.io.vread(tmp.name) # (frames, height, width, channel)
+        # video = np.moveaxis(video, 0,-1) # (height, width, channel, frames)
+        # video = np.float32(video) #convert to float32
+        
+        video = matlab_frames_list_per_user.swapaxes(0,1)
+        video = video.reshape(height, width, -1)
+        video = np.repeat(video[:,:,None],3,axis=2)
 
     if labels == 'vad_labels':
         # Compute vad
@@ -190,7 +195,8 @@ def process_write_video(args):
 
     # Store data and label in h5_file
     output_h5_file = output_video_dir + mat_file_path
-    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '_upsampled.h5'
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + 'ntcd_proc' + '_' + labels + '_upsampled.h5'
+    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '_upsampled.h5'
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
         os.makedirs(os.path.dirname(output_h5_file))
