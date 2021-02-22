@@ -115,7 +115,7 @@ def process_audio(args):
             pad_mode=pad_mode,
             pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-    #TODO: compare TF representation
+    # compare TF representation
     s_tf_torch = s_tf_torch[...,0].numpy() + 1j * s_tf_torch[...,1].numpy()
 
     # np.testing.assert_allclose(s_tf_torch, s_tf)

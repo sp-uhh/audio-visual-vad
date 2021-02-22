@@ -112,7 +112,8 @@ def speech_list(input_speech_dir,
     return file_paths, output_file_paths
 
 def noisy_speech_list(input_speech_dir,
-                dataset_type='train'):
+                dataset_type='train',
+                dataset_size='complete'):
     """
     Create clean speech + clean speech VAD
 
@@ -163,6 +164,13 @@ def noisy_speech_list(input_speech_dir,
     # List of SNRs
     snrs = ['-5', '0', '5', '10', '15', '20']
 
+    if dataset_size == 'subset':
+        # List of noise types
+        noise_types = ['Babble']
+
+        # List of SNRs
+        snrs = ['-5']
+
     # List of input / output noisy speech
     noisy_file_paths = []
     output_noisy_file_paths = []
@@ -193,7 +201,8 @@ def noisy_speech_list(input_speech_dir,
 
 #TODO: dict ouput noisy file / clean file
 def noisy_clean_pair_dict(input_speech_dir,
-                dataset_type='train'):
+                dataset_type='train',
+                dataset_size='complete'):
     """
     Create clean speech + clean speech VAD
 
@@ -243,6 +252,13 @@ def noisy_clean_pair_dict(input_speech_dir,
 
     # Clean dir
     clean_file_dir = 'ntcd_timit/Clean/' + dataset_type + '/'
+
+    if dataset_size == 'subset':
+        # List of noise types
+        noise_types = ['Babble']
+
+        # List of SNRs
+        snrs = ['-5']
 
     # Dict of noisy / clean pairs
     noisy_clean_pair_paths = {}
