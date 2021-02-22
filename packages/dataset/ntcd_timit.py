@@ -8,6 +8,7 @@ so we better to have a dedicated function for data retrieval.
 from glob import glob
 import os
 import pickle
+import pathlib
 
 #TODO: create clean speech dataset, noise-aware dataset, hybrid dataset --> store in process dataset with metadata (SNR, etc.)
 
@@ -90,10 +91,178 @@ def speech_list(input_speech_dir,
         data_dir += 'test/'
 
     # List of files
-    file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
+    mat_file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
 
     # Remove input_speech_dir from file_paths
     file_paths = ['ntcd_timit/Clean/volunteers/' + path.split('/')[-2] + '/straightcam/' \
-        + os.path.splitext(os.path.basename(path))[0] + '.wav' for path in file_paths]
+        + os.path.splitext(os.path.basename(path))[0] + '.wav' for path in mat_file_paths]
 
-    return file_paths
+    # Output_file_path
+    output_file_paths = []
+    for mat_file_path in mat_file_paths:
+        #Get the last 3 folders of noisy_file_path
+        p = pathlib.Path(mat_file_path)
+        p = str(pathlib.Path(*p.parts[-3:]))
+        p = os.path.splitext(p)[0] + '.wav'
+
+        output_file_path = os.path.join('ntcd_timit/Clean/' + p)
+
+        output_file_paths.append(output_file_path)
+        
+    return file_paths, output_file_paths
+
+def noisy_speech_list(input_speech_dir,
+                dataset_type='train'):
+    """
+    Create clean speech + clean speech VAD
+
+    Args:
+        dataset_type (str, optional): [description]. Defaults to 'training'.
+
+    Raises:
+        ValueError: [description]
+
+    Return:
+        Audio_files (list)
+    """
+    
+    data_dir = input_speech_dir + 'ntcd_timit/matlab_raw/'
+
+    ### Training data
+    if dataset_type == 'train':
+        data_dir += 'train/'
+
+    ### Validation data
+    if dataset_type == 'validation':
+        data_dir += 'dev/'
+
+    ### Test data
+    if dataset_type == 'test':
+        data_dir += 'test/'
+
+    # List of files
+    mat_file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
+
+    # Get the last folder + filename (w/o extension)
+    input_file_shortpaths = [path.split('/')[-2] + '/straightcam/' \
+        + os.path.splitext(os.path.basename(path))[0] + '.wav' for path in mat_file_paths]
+    
+    output_file_shortpaths = []
+    for mat_file_path in mat_file_paths:
+        p = pathlib.Path(mat_file_path)
+        p = str(pathlib.Path(*p.parts[-3:]))
+        p = os.path.splitext(p)[0] + '.wav'
+        output_file_shortpaths.append(p)
+
+    # # Noisy files
+    # noisy_file_paths = sorted(glob(data_dir + '*/*/volunteers/**/*.wav',recursive=True))
+
+    # List of noise types
+    noise_types = ['Babble', 'Cafe', 'Car', 'LR', 'Street', 'White']
+
+    # List of SNRs
+    snrs = ['-5', '0', '5', '10', '15', '20']
+
+    # List of input / output noisy speech
+    noisy_file_paths = []
+    output_noisy_file_paths = []
+
+    for noise_type in noise_types:
+        for snr in snrs:
+            noisy_file_dir = os.path.join('ntcd_timit/u/drspeech/data/TCDTIMIT/Noisy_TCDTIMIT',
+                                           noise_type,
+                                           snr,
+                                           'volunteers')
+            
+            subset_noisy_file_paths = [os.path.join(noisy_file_dir, file_shortpath)\
+                for file_shortpath in input_file_shortpaths]
+
+            noisy_file_paths.extend(subset_noisy_file_paths)
+            
+            output_noisy_file_dir = os.path.join('ntcd_timit',
+                                           noise_type,
+                                           snr)
+
+            subset_output_noisy_file_paths = [os.path.join(output_noisy_file_dir, file_shortpath)\
+                for file_shortpath in output_file_shortpaths]
+
+            output_noisy_file_paths.extend(subset_output_noisy_file_paths)            
+
+    return noisy_file_paths, output_noisy_file_paths
+
+
+#TODO: dict ouput noisy file / clean file
+def noisy_clean_pair_dict(input_speech_dir,
+                dataset_type='train'):
+    """
+    Create clean speech + clean speech VAD
+
+    Args:
+        dataset_type (str, optional): [description]. Defaults to 'training'.
+
+    Raises:
+        ValueError: [description]
+
+    Return:
+        Audio_files (list)
+    """
+    
+    data_dir = input_speech_dir + 'ntcd_timit/matlab_raw/'
+
+    ### Training data
+    if dataset_type == 'train':
+        data_dir += 'train/'
+
+    ### Validation data
+    if dataset_type == 'validation':
+        data_dir += 'dev/'
+
+    ### Test data
+    if dataset_type == 'test':
+        data_dir += 'test/'
+
+    # List of files
+    mat_file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
+
+    # Get the last folder + filename (w/o extension)
+    input_file_shortpaths = [path.split('/')[-2] + '/straightcam/' \
+        + os.path.splitext(os.path.basename(path))[0] + '.wav' for path in mat_file_paths]
+    
+    output_file_shortpaths = []
+    for mat_file_path in mat_file_paths:
+        p = pathlib.Path(mat_file_path)
+        p = str(pathlib.Path(*p.parts[-3:]))
+        p = os.path.splitext(p)[0] + '.wav'
+        output_file_shortpaths.append(p)
+
+    # List of noise types
+    noise_types = ['Babble', 'Cafe', 'Car', 'LR', 'Street', 'White']
+
+    # List of SNRs
+    snrs = ['-5', '0', '5', '10', '15', '20']
+
+    # Clean dir
+    clean_file_dir = 'ntcd_timit/Clean/' + dataset_type + '/'
+
+    # Dict of noisy / clean pairs
+    noisy_clean_pair_paths = {}
+
+    for noise_type in noise_types:
+        for snr in snrs:
+            noisy_file_dir = os.path.join('ntcd_timit/u/drspeech/data/TCDTIMIT/Noisy_TCDTIMIT',
+                                           noise_type,
+                                           snr,
+                                           'volunteers')
+            
+            # Noisy subset
+            subset_noisy_file_paths = [os.path.join(noisy_file_dir, file_shortpath)\
+                for file_shortpath in input_file_shortpaths]
+
+            # Clean subset
+            subset_clean_file_paths = [clean_file_dir + path.split('/')[-3] + '/' \
+                + os.path.basename(path) for path in subset_noisy_file_paths]
+
+            # Extend dict
+            noisy_clean_pair_paths.update(dict(zip(subset_noisy_file_paths, subset_clean_file_paths)))
+
+    return noisy_clean_pair_paths

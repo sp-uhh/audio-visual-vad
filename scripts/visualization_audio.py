@@ -13,7 +13,7 @@ import time
 import concurrent.futures # for multiprocessing
 import soundfile as sf
 
-from packages.processing.stft import stft
+from packages.processing.stft import stft, stft_pytorch
 from packages.processing.target import noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
 from packages.visualization import display_wav_spectro_mask
 
@@ -91,7 +91,7 @@ def process_audio(args):
     # Normalize audio
     s_t = s_t/(np.max(np.abs(s_t)))
 
-    # TF reprepsentation
+    # TF reprepsentation (Librosa)
     s_tf = stft(s_t,
                 fs=fs,
                 wlen_sec=wlen_sec,
@@ -102,9 +102,25 @@ def process_audio(args):
                 pad_at_end=pad_at_end,
                 dtype=dtype) # shape = (freq_bins, frames)
 
+    # TF representation (PyTorch)
+    s_tf_torch = stft_pytorch(torch.Tensor(s_t),
+            fs=fs,
+            wlen_sec=wlen_sec,
+            win=win, 
+            hop_percent=hop_percent,
+            center=center,
+            pad_mode=pad_mode,
+            pad_at_end=pad_at_end) # shape = (freq_bins, frames)
+
+    #TODO: compare TF representation
+    s_tf_torch = s_tf_torch[...,0].numpy() + 1j * s_tf_torch[...,1].numpy()
+
+    # np.testing.assert_allclose(s_tf_torch, s_tf)
+
     if labels == 'vad_labels':
         # Compute vad
-        s_vad = noise_robust_clean_speech_VAD(s_tf,
+        # s_vad = noise_robust_clean_speech_VAD(s_tf,
+        s_vad = noise_robust_clean_speech_VAD(s_tf_torch,
                                             quantile_fraction_begin=quantile_fraction_begin,
                                             quantile_fraction_end=quantile_fraction_end,
                                             quantile_weight=quantile_weight)
@@ -112,7 +128,8 @@ def process_audio(args):
 
     if labels == 'ibm_labels':
         # binary mask
-        speech_ibm = noise_robust_clean_speech_IBM(s_tf,
+        # speech_ibm = noise_robust_clean_speech_IBM(s_tf,
+        speech_ibm = noise_robust_clean_speech_IBM(s_tf_torch,
                                             vad_quantile_fraction_begin=vad_quantile_fraction_begin,
                                             vad_quantile_fraction_end=vad_quantile_fraction_end,
                                             ibm_quantile_fraction=ibm_quantile_fraction,
@@ -120,7 +137,8 @@ def process_audio(args):
         label = speech_ibm
 
     #TODO: modify
-    fig = display_wav_spectro_mask(x=s_t, x_tf=s_tf, x_ibm=label,
+    # fig = display_wav_spectro_mask(x=s_t, x_tf=s_tf, x_ibm=label,
+    fig = display_wav_spectro_mask(x=s_t, x_tf=s_tf_torch, x_ibm=label,
                         fs=fs, vmin=vmin, vmax=vmax,
                         wlen_sec=wlen_sec, hop_percent=hop_percent,
                         xticks_sec=xticks_sec, fontsize=fontsize)
@@ -139,7 +157,8 @@ def process_audio(args):
         os.makedirs(os.path.dirname(output_path))
 
     # fig.savefig(output_path + '_hard_mask.png')
-    fig.savefig(output_path + '_hard_' + labels + '_upsampled.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_upsampled.png')
+    fig.savefig(output_path + '_hard_' + labels + '_torch.png')
 
 def main():
 
@@ -147,7 +166,7 @@ def main():
     mat_file_paths = video_list(input_video_dir=input_video_dir,
                              dataset_type=dataset_type)
     
-    audio_file_paths = speech_list(input_speech_dir=input_video_dir,
+    audio_file_paths, output_audio_file_paths = speech_list(input_speech_dir=input_video_dir,
                              dataset_type=dataset_type)
 
     t1 = time.perf_counter()
@@ -158,7 +177,6 @@ def main():
     # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
     #     executor.map(process_audio, args)
 
-    # TODO: in parallel
     for i, args in enumerate(zip(mat_file_paths, audio_file_paths)):
         process_audio(args)
     
