@@ -3,7 +3,7 @@ sys.path.append('.')
 
 import os
 import numpy as np
-import torch
+import torch, torchaudio
 import h5py  # to read .mat files
 import math
 from tqdm import tqdm
@@ -87,9 +87,12 @@ def process_audio(args):
 
     # Read clean speech
     s_t, fs_s = sf.read(input_video_dir + audio_file_path, samplerate=None)
+    s_t_torch, fs_s = torchaudio.load(input_video_dir + audio_file_path)
+    s_t_torch = s_t_torch[0] # 1channel
 
     # Normalize audio
     s_t = s_t/(np.max(np.abs(s_t)))
+    s_t_torch = s_t_torch / (torch.max(torch.abs(s_t_torch)))
 
     # TF reprepsentation (Librosa)
     s_tf = stft(s_t,
@@ -103,7 +106,7 @@ def process_audio(args):
                 dtype=dtype) # shape = (freq_bins, frames)
 
     # TF representation (PyTorch)
-    s_tf_torch = stft_pytorch(torch.Tensor(s_t),
+    s_tf_torch = stft_pytorch(s_t_torch,
             fs=fs,
             wlen_sec=wlen_sec,
             win=win, 
