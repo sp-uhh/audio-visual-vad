@@ -54,7 +54,7 @@ def video_list(input_video_dir,
             
             # file_paths = sorted(glob(data_dir + '**/*' + '_' + 'ntcd_proc' + '_' + labels + '_upsampled.h5',recursive=True))
         else:
-            file_paths = sorted(glob(data_dir + + '**/*' + '_' + labels + '.h5',recursive=True))
+            file_paths = sorted(glob(data_dir + '**/*' + '_' + labels + '.h5',recursive=True))
 
     # Remove input_video_dir from file_paths
     file_paths = [os.path.relpath(path, input_video_dir) for path in file_paths]
@@ -111,7 +111,7 @@ def speech_list(input_speech_dir,
         
     return file_paths, output_file_paths
 
-def noisy_speech_list(input_speech_dir,
+def noisy_speech_dict(input_speech_dir,
                 dataset_type='train',
                 dataset_size='complete'):
     """
@@ -173,9 +173,8 @@ def noisy_speech_list(input_speech_dir,
         # List of SNRs
         snrs = ['-5']
 
-    # List of input / output noisy speech
-    noisy_file_paths = []
-    output_noisy_file_paths = []
+    # Dict of raw noisy / processed noisy pairs
+    noisy_input_output_pair_paths = {}
 
     for noise_type in noise_types:
         for snr in snrs:
@@ -184,24 +183,26 @@ def noisy_speech_list(input_speech_dir,
                                            snr,
                                            'volunteers')
             
+            # Input subset            
             subset_noisy_file_paths = [os.path.join(noisy_file_dir, file_shortpath)\
                 for file_shortpath in input_file_shortpaths]
-
-            noisy_file_paths.extend(subset_noisy_file_paths)
             
+            # Output subset            
             output_noisy_file_dir = os.path.join('ntcd_timit',
+                                            'Noisy',
                                            noise_type,
                                            snr)
 
             subset_output_noisy_file_paths = [os.path.join(output_noisy_file_dir, file_shortpath)\
                 for file_shortpath in output_file_shortpaths]
 
-            output_noisy_file_paths.extend(subset_output_noisy_file_paths)            
+            # Extend dict
+            noisy_input_output_pair_paths.update(dict(zip(subset_noisy_file_paths, subset_output_noisy_file_paths)))
 
-    return noisy_file_paths, output_noisy_file_paths
+    return noisy_input_output_pair_paths
 
 
-#TODO: dict ouput noisy file / clean file
+# dict mapping raw noisy file to processed clean file
 def noisy_clean_pair_dict(input_speech_dir,
                 dataset_type='train',
                 dataset_size='complete'):
@@ -255,7 +256,19 @@ def noisy_clean_pair_dict(input_speech_dir,
     #TODO: snrs til -20dB
 
     # Clean dir
-    clean_file_dir = 'ntcd_timit/Clean/' + dataset_type + '/'
+    clean_file_dir = 'ntcd_timit/Clean/'
+
+    ### Training data
+    if dataset_type == 'train':
+        clean_file_dir += 'train/'
+
+    ### Validation data
+    if dataset_type == 'validation':
+        clean_file_dir += 'dev/'
+
+    ### Test data
+    if dataset_type == 'test':
+        clean_file_dir += 'test/'
 
     if dataset_size == 'subset':
         # List of noise types

@@ -23,7 +23,7 @@ from packages.processing.target import noise_robust_clean_speech_VAD, noise_robu
 # Parameters
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
-    from packages.dataset.ntcd_timit import video_list, speech_list, noisy_clean_pair_dict
+    from packages.dataset.ntcd_timit import video_list, speech_list, noisy_clean_pair_dict, noisy_speech_dict
 
 # Parameters
 ## Dataset
@@ -169,10 +169,12 @@ def process_write_label(args):
 
 def process_write_noisy_audio(args):
     # Separate args
+    #TODO: modify
     noisy_file_path, clean_file_path = args[0], args[1]
 
     # Copy noisy files to processed
-    ouput_noisy_file_path = output_video_dir + clean_file_path.replace('Clean', 'Noisy')
+    ouput_noisy_file_path = noisy_input_output_pair_paths[noisy_file_path]
+    ouput_noisy_file_path = output_video_dir + ouput_noisy_file_path
     if not os.path.exists(os.path.dirname(ouput_noisy_file_path)):
         os.makedirs(os.path.dirname(ouput_noisy_file_path))
     copyfile(input_video_dir + noisy_file_path, ouput_noisy_file_path)
@@ -226,6 +228,7 @@ def process_write_noisy_audio(args):
 def main():
     
     global dataset_type
+    global noisy_input_output_pair_paths
 
     for dataset_type in dataset_types:
 
@@ -252,19 +255,24 @@ def main():
 
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')
-        
+
+        # Dict mapping noisy speech to clean speech
+        noisy_clean_pair_paths = noisy_clean_pair_dict(input_speech_dir=input_video_dir,
+                                            dataset_type=dataset_type,
+                                            dataset_size=dataset_size)
+
+        # Dict mapping input noisy speech to output noisy speech
+        noisy_input_output_pair_paths = noisy_speech_dict(input_speech_dir=input_video_dir,
+                                            dataset_type=dataset_type,
+                                            dataset_size=dataset_size)
+
+        # loop over inputs for the statistics
+        args = list(noisy_clean_pair_paths.items())
+
         # Compute mean, std of the train set
         if dataset_type == 'train':
             # VAR = E[X**2] - E[X]**2
             n_samples, channels_sum, channels_squared_sum = 0., 0., 0.
-
-            # Dict mapping noisy speech to clean speech
-            noisy_clean_pair_paths = noisy_clean_pair_dict(input_speech_dir=input_video_dir,
-                                               dataset_type=dataset_type,
-                                               dataset_size=dataset_size)
-
-            # loop over inputs for the statistics
-            args = list(noisy_clean_pair_paths.items())
 
             t1 = time.perf_counter()
 
@@ -275,7 +283,7 @@ def main():
                 channels_squared_sum += c_s_s
 
             # # Save data on SSD....
-            # with concurrent.futures.ProcessdPoolExecutor(max_workers=None) as executor:
+            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
             #     train_stats = executor.map(process_write_noisy_audio, args)
             
             # for (n_s, c_s, c_s_s) in train_stats:
