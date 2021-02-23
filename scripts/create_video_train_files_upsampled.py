@@ -255,11 +255,12 @@ def main():
         mat_file_paths = video_list(input_video_dir=input_video_dir,
                                 dataset_type=dataset_type)
         
-        audio_file_paths = speech_list(input_speech_dir=input_video_dir,
+        input_clean_file_paths, \
+            output_clean_file_paths = speech_list(input_speech_dir=input_video_dir,
                                 dataset_type=dataset_type)
 
-        args = [[mat_file_path, audio_file_path]
-                        for mat_file_path, audio_file_path in zip(mat_file_paths, audio_file_paths)]
+        args = [[mat_file_path, input_clean_file_path]
+                        for mat_file_path, input_clean_file_path in zip(mat_file_paths, input_clean_file_paths)]
 
         # Compute mean, std of the train set
         if dataset_type == 'train':

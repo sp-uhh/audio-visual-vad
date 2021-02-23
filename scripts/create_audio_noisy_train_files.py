@@ -29,8 +29,8 @@ if dataset_name == 'ntcd_timit':
 ## Dataset
 dataset_types = ['train', 'validation']
 
-dataset_size = 'subset'
-# dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 output_data_folder = 'export'
 
 # Labels
@@ -175,8 +175,10 @@ def process_write_noisy_audio(args):
     # Copy noisy files to processed
     ouput_noisy_file_path = noisy_input_output_pair_paths[noisy_file_path]
     ouput_noisy_file_path = output_video_dir + ouput_noisy_file_path
+    
     if not os.path.exists(os.path.dirname(ouput_noisy_file_path)):
         os.makedirs(os.path.dirname(ouput_noisy_file_path))
+
     copyfile(input_video_dir + noisy_file_path, ouput_noisy_file_path)
 
     # Read clean speech
@@ -246,12 +248,12 @@ def main():
 
         t1 = time.perf_counter()
 
-        # Process targets
-        for i, arg in tqdm(enumerate(args)):
-            process_write_label(arg)
+        # # Process targets
+        # for i, arg in tqdm(enumerate(args)):
+        #     process_write_label(arg)
 
-        # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-        #     executor.map(process_write_label, args)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+            executor.map(process_write_label, args)
 
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')
@@ -276,20 +278,20 @@ def main():
 
             t1 = time.perf_counter()
 
-            for i, arg in tqdm(enumerate(args)):
-                n_s, c_s, c_s_s = process_write_noisy_audio(arg)
-                n_samples += n_s
-                channels_sum += c_s
-                channels_squared_sum += c_s_s
-
-            # # Save data on SSD....
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            #     train_stats = executor.map(process_write_noisy_audio, args)
-            
-            # for (n_s, c_s, c_s_s) in train_stats:
+            # for i, arg in tqdm(enumerate(args)):
+            #     n_s, c_s, c_s_s = process_write_noisy_audio(arg)
             #     n_samples += n_s
             #     channels_sum += c_s
-            #     channels_squared_sum += c_s_s 
+            #     channels_squared_sum += c_s_s
+
+            # Save data on SSD....
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+                train_stats = executor.map(process_write_noisy_audio, args)
+            
+            for (n_s, c_s, c_s_s) in train_stats:
+                n_samples += n_s
+                channels_sum += c_s
+                channels_squared_sum += c_s_s 
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')
@@ -321,11 +323,11 @@ def main():
 
             t1 = time.perf_counter()
 
-            for i, arg in tqdm(enumerate(args)):
-                process_write_noisy_audio(arg)
+            # for i, arg in tqdm(enumerate(args)):
+            #     process_write_noisy_audio(arg)
 
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            #     executor.map(process_write_noisy_audio, args)
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+                executor.map(process_write_noisy_audio, args)
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')
