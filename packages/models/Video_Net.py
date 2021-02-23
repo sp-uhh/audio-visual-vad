@@ -90,7 +90,7 @@ class DeepVAD_video(nn.Module):
         else:
             out, lens_unpacked = pad_packed_sequence(out, batch_first=True, total_length=total_length) # to make unpacking work with DataParallel
 
-        out = self.dropout(out)
+        # out = self.dropout(out)
         out = self.vad_video(out)
         return out
 
