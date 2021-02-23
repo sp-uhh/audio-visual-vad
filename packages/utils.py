@@ -78,3 +78,37 @@ def collate_many2many(batch):
     lengths = torch.LongTensor(lengths)
     
     return lengths, padded_data, target
+
+def collate_many2many_audio(batch):
+    # Get dimensions
+    lengths = [i[-1] for i in batch]   # get the length of each sequence in the batch
+    batch_size = len(batch)
+    seq_length = max(lengths)
+    x_dim, _ = batch[0][0].size()
+    y_dim, _ = batch[0][1].size()
+
+    padded_data = torch.zeros((batch_size, x_dim, seq_length))
+    
+    target = torch.zeros((batch_size, y_dim, seq_length))
+
+    for idx, (sample, length) in enumerate(zip(batch, lengths)):
+        # Padd sequence at beginning
+        npad = (0, seq_length-length)
+        padded_data[idx] = pad(sample[0], npad, mode='constant', value=0.) # pad last dimension
+        target[idx] = pad(sample[1], npad, mode='constant', value=0.)
+
+    # Put seq_length as 2nd axis using unsqueeze + tranpose
+    padded_data = padded_data.unsqueeze(1).transpose(1, -1) # .unsqueeze(location).transpose(location, dim) --> (B, T, *, 1)
+    target = target.unsqueeze(1).transpose(1, -1) # .unsqueeze(location).transpose(location, dim) --> (B, T, *, 1)
+    
+    # Remove last axis 
+    padded_data = padded_data[...,0]
+    target = target[...,0]
+
+    # Make dim contiguous
+    padded_data = padded_data.contiguous()
+
+    # Make lengths as LongTensor
+    lengths = torch.LongTensor(lengths)
+    
+    return lengths, padded_data, target
