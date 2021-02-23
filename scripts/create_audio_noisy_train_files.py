@@ -14,6 +14,7 @@ import concurrent.futures # for multiprocessing
 import time
 import torch
 import torchaudio
+from shutil import copyfile
 
 from packages.processing.stft import stft_pytorch
 from packages.processing.video import preprocess_ntcd_matlab
@@ -28,8 +29,8 @@ if dataset_name == 'ntcd_timit':
 ## Dataset
 dataset_types = ['train', 'validation']
 
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 output_data_folder = 'export'
 
 # Labels
@@ -166,9 +167,15 @@ def process_write_label(args):
         fy.resize((fy.shape[-1] + label.shape[-1]), axis = len(fy.shape)-1)
         fy[...,-label.shape[-1]:] = label
 
-def process_noisy_audio(args):
+def process_write_noisy_audio(args):
     # Separate args
     noisy_file_path, clean_file_path = args[0], args[1]
+
+    # Copy noisy files to processed
+    ouput_noisy_file_path = output_video_dir + clean_file_path.replace('Clean', 'Noisy')
+    if not os.path.exists(os.path.dirname(ouput_noisy_file_path)):
+        os.makedirs(os.path.dirname(ouput_noisy_file_path))
+    copyfile(input_video_dir + noisy_file_path, ouput_noisy_file_path)
 
     # Read clean speech
     noisy_speech, fs_noisy_speech = torchaudio.load(input_video_dir + noisy_file_path)
@@ -207,12 +214,14 @@ def process_noisy_audio(args):
     if noisy_spectrogram.shape[-1] > video.shape[-1]:
         noisy_spectrogram = noisy_spectrogram[...,:video.shape[-1]]
 
-    # VAR = E[X**2] - E[X]**2
-    n_samples = noisy_spectrogram.shape[-1]
-    channels_sum = np.sum(noisy_spectrogram, axis=-1)
-    channels_squared_sum = np.sum(noisy_spectrogram**2, axis=-1)
+    # Compute mean, std
+    if dataset_type == 'train':
+        # VAR = E[X**2] - E[X]**2
+        n_samples = noisy_spectrogram.shape[-1]
+        channels_sum = np.sum(noisy_spectrogram, axis=-1)
+        channels_squared_sum = np.sum(noisy_spectrogram**2, axis=-1)
 
-    return n_samples, channels_sum, channels_squared_sum
+        return n_samples, channels_sum, channels_squared_sum
 
 def main():
     
@@ -234,12 +243,12 @@ def main():
 
         t1 = time.perf_counter()
 
-        # # Process targets
-        # for i, arg in tqdm(enumerate(args)):
-        #     process_write_label(arg)
+        # Process targets
+        for i, arg in tqdm(enumerate(args)):
+            process_write_label(arg)
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            executor.map(process_write_label, args)
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+        #     executor.map(process_write_label, args)
 
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')
@@ -255,23 +264,24 @@ def main():
                                                dataset_size=dataset_size)
 
             # loop over inputs for the statistics
-            args = noisy_clean_pair_paths.items()
+            args = list(noisy_clean_pair_paths.items())
 
             t1 = time.perf_counter()
 
-            # for i, arg in tqdm(enumerate(args)):
-            #     n_s, c_s, c_s_s = process_noisy_audio(arg)
-            #     n_samples += n_s
-            #     channels_sum += c_s
-            #     channels_squared_sum += c_s_s
-
-            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-                train_stats = executor.map(process_noisy_audio, args)
-            
-            for (n_s, c_s, c_s_s) in train_stats:
+            for i, arg in tqdm(enumerate(args)):
+                n_s, c_s, c_s_s = process_write_noisy_audio(arg)
                 n_samples += n_s
                 channels_sum += c_s
-                channels_squared_sum += c_s_s 
+                channels_squared_sum += c_s_s
+
+            # # Save data on SSD....
+            # with concurrent.futures.ProcessdPoolExecutor(max_workers=None) as executor:
+            #     train_stats = executor.map(process_write_noisy_audio, args)
+            
+            # for (n_s, c_s, c_s_s) in train_stats:
+            #     n_samples += n_s
+            #     channels_sum += c_s
+            #     channels_squared_sum += c_s_s 
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')
@@ -282,7 +292,7 @@ def main():
             std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
 
             # Save statistics
-            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + labels + '_statistics.h5')
+            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
             if not os.path.exists(os.path.dirname(output_dataset_file)):
                 os.makedirs(os.path.dirname(output_dataset_file))
 
@@ -298,6 +308,19 @@ def main():
                 f['X_' + dataset_type + '_mean'][:] = mean[..., None] # Add axis to fit chunks shape
                 f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
                 print('Mean and std saved in HDF5.')
+        
+        if dataset_type in ['validation', 'test']:
+
+            t1 = time.perf_counter()
+
+            for i, arg in tqdm(enumerate(args)):
+                process_write_noisy_audio(arg)
+
+            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+            #     executor.map(process_write_noisy_audio, args)
+
+            t2 = time.perf_counter()
+            print(f'Finished in {t2 - t1} seconds')
 
 if __name__ == '__main__':
     main()
