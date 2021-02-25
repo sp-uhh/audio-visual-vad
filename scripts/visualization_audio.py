@@ -14,7 +14,8 @@ import concurrent.futures # for multiprocessing
 import soundfile as sf
 
 from packages.processing.stft import stft, stft_pytorch
-from packages.processing.target import noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
+from packages.processing.target import clean_speech_IBM, \
+                    noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
 from packages.visualization import display_wav_spectro_mask
 
 # Dataset
@@ -53,15 +54,23 @@ pad_at_end = True  # pad audio file at end to match same size after stft + istft
 dtype = 'complex64' # STFT data type
 
 ## Noise robust VAD
-quantile_fraction_begin = 0.93
-quantile_fraction_end = 0.999
-quantile_weight = 0.999
+eps = 1e-8
+# quantile_fraction_begin = 0.93
+quantile_fraction_begin = 0.5
+# quantile_fraction_end = 0.999
+quantile_fraction_end = 0.55
+# quantile_weight = 0.999
+quantile_weight = 1.0
 
 ## Noise robust IBM
-vad_quantile_fraction_begin = 0.93
-vad_quantile_fraction_end = 0.999
-ibm_quantile_fraction = 0.999
-ibm_quantile_weight = 0.999
+# vad_quantile_fraction_begin = 0.93
+vad_quantile_fraction_begin = 0.5
+# vad_quantile_fraction_end = 0.999
+vad_quantile_fraction_end = 0.55
+# ibm_quantile_fraction = 0.999
+ibm_quantile_fraction = 0.25
+# ibm_quantile_weight = 0.999
+ibm_quantile_weight = 1.0
 
 ## Plot spectrograms
 vmin = -40 # in dB
@@ -122,8 +131,8 @@ def process_audio(args):
 
     if labels == 'vad_labels':
         # Compute vad
-        # s_vad = noise_robust_clean_speech_VAD(s_tf,
-        s_vad = noise_robust_clean_speech_VAD(s_tf_torch,
+        # # s_vad = noise_robust_clean_speech_VAD(s_tf,
+        speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
                                             quantile_fraction_begin=quantile_fraction_begin,
                                             quantile_fraction_end=quantile_fraction_end,
                                             quantile_weight=quantile_weight)
@@ -131,12 +140,16 @@ def process_audio(args):
 
     if labels == 'ibm_labels':
         # binary mask
-        # speech_ibm = noise_robust_clean_speech_IBM(s_tf,
+        # # speech_ibm = noise_robust_clean_speech_IBM(s_tf,
         speech_ibm = noise_robust_clean_speech_IBM(s_tf_torch,
                                             vad_quantile_fraction_begin=vad_quantile_fraction_begin,
                                             vad_quantile_fraction_end=vad_quantile_fraction_end,
                                             ibm_quantile_fraction=ibm_quantile_fraction,
                                             quantile_weight=ibm_quantile_weight)   
+        # speech_ibm = clean_speech_IBM(s_tf_torch,
+        #                               quantile_fraction=ibm_quantile_fraction,
+        #                               quantile_weight=ibm_quantile_weight,
+        #                               eps=eps)   
         label = speech_ibm
 
     #TODO: modify
@@ -161,7 +174,10 @@ def process_audio(args):
 
     # fig.savefig(output_path + '_hard_mask.png')
     # fig.savefig(output_path + '_hard_' + labels + '_upsampled.png')
-    fig.savefig(output_path + '_hard_' + labels + '_torch.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_torch.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_noise-sensitive.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_log.png')
+    fig.savefig(output_path + '_hard_' + labels + '_robust_log.png')
 
 def main():
 

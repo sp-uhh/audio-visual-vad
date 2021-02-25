@@ -66,7 +66,7 @@ std_norm =True
 eps = 1e-8
 
 # Training
-batch_size = 128
+batch_size = 64
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -82,7 +82,8 @@ if labels == 'ibm_labels':
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
 
 #####################################################################################################
 
@@ -171,8 +172,8 @@ def main():
             # y_hat_soft = torch.squeeze(y_hat_soft)
             loss = 0.
             for (length, pred, target) in zip(lengths, y_hat_soft, y):
-                loss += binary_cross_entropy(pred[:length], target[:length])
-                # loss += binary_cross_entropy(pred[:length], target[:length], eps)
+                # loss += binary_cross_entropy(pred[:length], target[:length])
+                loss += binary_cross_entropy(pred[:length], target[:length], eps)
             # loss /= len(lengths)
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
             

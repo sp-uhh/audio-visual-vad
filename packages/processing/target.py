@@ -6,7 +6,8 @@ import numpy as np
 
 def clean_speech_IBM(observations,
                      quantile_fraction=0.98,
-                     quantile_weight=0.999):
+                     quantile_weight=0.999,
+                     eps=1e-8):
     """ Calculate softened mask according to lorenz function criterion.
     :param observation: STFT of the the observed signal
     :param quantile_fraction: Fraction of observations which are rated down
@@ -14,11 +15,14 @@ def clean_speech_IBM(observations,
     :return: quantile_mask
     """
     power = abs(observations * observations.conj())
-    sorted_power = np.random.rand(power.shape[1])
+    power = 10 * np.log10(power + eps) # Smoother mask with log
+    min_power = 10 * np.log10(eps) # Min value to make all values in sorted_power positive
     sorted_power = np.sort(power, axis=None)[::-1]
+    sorted_power -= min_power # Subtract because min_power is negative
     lorenz_function = np.cumsum(sorted_power) / np.sum(sorted_power)
     # threshold = np.min(sorted_power[lorenz_function < quantile_fraction])
     threshold = sorted_power[lorenz_function < quantile_fraction][-1]
+    threshold += min_power
     mask = power > threshold
     mask = 0.5 + quantile_weight * (mask - 0.5)
     mask = np.round(mask) # to have either 0 or 1 values
@@ -28,7 +32,8 @@ def clean_speech_IBM(observations,
 
 def clean_speech_VAD(observations,
                      quantile_fraction=0.98,
-                     quantile_weight=0.999):
+                     quantile_weight=0.999,
+                     eps=1e-8):
     """ Calculate softened mask according to lorenz function criterion.
     :param observation: STFT of the the observed signal
     :param quantile_fraction: Fraction of observations which are rated down
@@ -36,11 +41,15 @@ def clean_speech_VAD(observations,
     :return: quantile_mask
     """
     power = abs(observations * observations.conj())
+    power = 10 * np.log10(power + eps) # Smoother mask with log
+    min_power = 10 * np.log10(eps) * power.shape[0] # Min value to make all values in sorted_power positive
     power = power.sum(axis=0)
     sorted_power = np.sort(power, axis=None)[::-1]
+    sorted_power -= min_power # Subtract because min_power is negative
     lorenz_function = np.cumsum(sorted_power) / np.sum(sorted_power)
     # threshold = np.min(sorted_power[lorenz_function < quantile_fraction])
     threshold = sorted_power[lorenz_function < quantile_fraction][-1]
+    threshold += min_power
     vad = power > threshold
     vad = 0.5 + quantile_weight * (vad - 0.5)
     vad = np.round(vad) # to have either 0 or 1 values

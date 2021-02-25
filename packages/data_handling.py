@@ -241,14 +241,22 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         self.pad_mode = pad_mode
         self.pad_at_end = pad_at_end
 
-        # Dict mapping noisy speech to clean speech
-        self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
-                                                dataset_type=dataset_type,
-                                                dataset_size=dataset_size,
-                                                labels=labels)
+        # # Dict mapping noisy speech to clean speech
+        # self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
+        #                                         dataset_type=dataset_type,
+        #                                         dataset_size=dataset_size,
+        #                                         labels=labels)
 
-        # Convert dict to tuples
-        self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
+        # # Convert dict to tuples
+        # self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
+
+        input_clean_file_paths, \
+            output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
+                                dataset_type=dataset_type)
+
+        self.noisy_clean_pair_paths = [(input_clean_file_path, output_clean_file_path)
+                        for input_clean_file_path, output_clean_file_path\
+                            in zip(input_clean_file_paths, output_clean_file_paths)]
 
         self.dataset_len = len(self.noisy_clean_pair_paths) # total number of utterances
 
@@ -257,7 +265,8 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         (proc_noisy_file_path, clean_file_path) = self.noisy_clean_pair_paths[i]
         
         # Read noisy audio
-        noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + proc_noisy_file_path)
+        # noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + proc_noisy_file_path)
+        noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + clean_file_path)
         noisy_speech = noisy_speech[0] # 1channel
 
         # Normalize audio
@@ -275,9 +284,13 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
 
         # Power spectrogram
         data = noisy_speech_tf[...,0]**2 + noisy_speech_tf[...,1]**2
+
+        # Apply log
+        data = torch.log(data + 1e-8)
        
         # Read label
-        output_h5_file = clean_file_path
+        # output_h5_file = clean_file_path
+        output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '.h5'
 
         with h5.File(output_h5_file, 'r') as file:
             label = np.array(file["Y"][:])

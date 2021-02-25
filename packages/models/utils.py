@@ -104,7 +104,8 @@ def log_sum_exp(tensor, dim=-1, sum_op=torch.sum):
     max, _ = torch.max(tensor, dim=dim, keepdim=True)
     return torch.log(sum_op(torch.exp(tensor - max), dim=dim, keepdim=True) + 1e-8) + max
 
-def binary_cross_entropy(r, x): #, eps):
+# def binary_cross_entropy(r, x):
+def binary_cross_entropy(r, x, eps):
     # return -torch.mean(torch.sum(x*torch.log(r + eps) + (1 - x)*torch.log(1 - r + eps), dim=-1))
     # return -torch.mean(torch.sum(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1))
     # return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1)
