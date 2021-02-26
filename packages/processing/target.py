@@ -61,7 +61,8 @@ def clean_speech_VAD(observations,
 def noise_robust_clean_speech_VAD(observations,
                                   quantile_fraction_begin=0.93,
                                   quantile_fraction_end=0.99,
-                                  quantile_weight=0.999):
+                                  quantile_weight=0.999,
+                                  eps=1e-8):
     """
     Create VAD labels robust to noisy speech recordings.
     In particular, the labels are robust to noise occuring before speech.
@@ -75,9 +76,9 @@ def noise_robust_clean_speech_VAD(observations,
     Returns:
         [type]: [description]
     """
-    vad_labels = clean_speech_VAD(observations, quantile_fraction=quantile_fraction_begin, quantile_weight=quantile_weight)
+    vad_labels = clean_speech_VAD(observations, quantile_fraction=quantile_fraction_begin, quantile_weight=quantile_weight, eps=eps)
     vad_labels = vad_labels[0]
-    vad_labels_end = clean_speech_VAD(observations, quantile_fraction=quantile_fraction_end, quantile_weight=quantile_weight)
+    vad_labels_end = clean_speech_VAD(observations, quantile_fraction=quantile_fraction_end, quantile_weight=quantile_weight, eps=eps)
     vad_labels_end = vad_labels_end[0]
     indices_begin = np.nonzero(vad_labels)
     indices_end = np.nonzero(vad_labels_end)
@@ -89,7 +90,8 @@ def noise_robust_clean_speech_IBM(observations,
                                   vad_quantile_fraction_begin=0.93,
                                   vad_quantile_fraction_end=0.99,
                                   ibm_quantile_fraction=0.999,
-                                  quantile_weight=0.999):
+                                  quantile_weight=0.999,
+                                  eps=1e-8):
     """
     Create IBM labels robust to noisy speech recordings using noise-robst VAD.
     In particular, the labels are robust to noise occuring before speech.
@@ -106,7 +108,8 @@ def noise_robust_clean_speech_IBM(observations,
     vad_labels = noise_robust_clean_speech_VAD(observations,
                                                quantile_fraction_begin=vad_quantile_fraction_begin,
                                                quantile_fraction_end=vad_quantile_fraction_end,
-                                               quantile_weight=quantile_weight)
-    ibm_labels = clean_speech_IBM(observations, quantile_fraction=ibm_quantile_fraction, quantile_weight=quantile_weight)
+                                               quantile_weight=quantile_weight,
+                                               eps=eps)
+    ibm_labels = clean_speech_IBM(observations, quantile_fraction=ibm_quantile_fraction, quantile_weight=quantile_weight, eps=eps)
     ibm_labels = ibm_labels * vad_labels
     return ibm_labels

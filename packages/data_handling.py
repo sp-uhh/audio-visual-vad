@@ -13,7 +13,8 @@ from packages.processing.stft import stft_pytorch
 # Parameters
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
-    from packages.dataset.ntcd_timit import video_list, speech_list, proc_noisy_clean_pair_dict
+    from packages.dataset.ntcd_timit import video_list, speech_list,\
+        proc_noisy_clean_pair_dict, proc_video_audio_pair_dict
 
 base_path = "data/complete/matlab_raw/"
 
@@ -196,26 +197,34 @@ class WavWholeSequenceSpectrogramLabeledFrames(Dataset):
         # Do not load hdf5 in __init__ if num_workers > 0
         self.dataset_type = dataset_type        
         self.input_video_dir = input_video_dir
+        self.labels = labels
 
-        # Create file list
-        self.mat_file_paths = video_list(input_video_dir=input_video_dir,
-                                dataset_type=dataset_type,
-                                labels=labels,
-                                upsampled=upsampled)
+        # Dict mapping video to clean speech
+        self.video_file_paths, self.audio_file_paths = proc_video_audio_pair_dict(input_video_dir=input_video_dir,
+                                                dataset_type=dataset_type,
+                                                labels=labels,
+                                                upsampled=upsampled)
         
-        self.dataset_len = len(self.mat_file_paths) # total number of utterances
+        self.dataset_len = len(self.video_file_paths) # total number of utterances
 
     def __getitem__(self, i):
-        # select utterance
-        h5_file_path = self.input_video_dir + self.mat_file_paths[i]
+        # Read video
+        h5_file_path = self.input_video_dir + self.video_file_paths[i]
 
         # Open HDF5 file
         with h5.File(h5_file_path, 'r') as file:
             data = np.array(file["X"][:])
-            labels = np.array(file["Y"][:])
-            length = data.shape[-1]
+
+        # Sequence length
+        length = data.shape[-1]
+
+        # Read label
+        h5_file_path = self.input_video_dir + self.audio_file_paths[i]
+
+        with h5.File(h5_file_path, 'r') as file:
+            label = np.array(file["Y"][:])
         
-        return torch.Tensor(data), torch.Tensor(labels), length #, length # Take only the last label
+        return torch.Tensor(data), torch.Tensor(label), length #, length # Take only the last label
 
     def __len__(self):
         return self.dataset_len
@@ -241,22 +250,23 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         self.pad_mode = pad_mode
         self.pad_at_end = pad_at_end
 
-        # # Dict mapping noisy speech to clean speech
-        # self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
-        #                                         dataset_type=dataset_type,
-        #                                         dataset_size=dataset_size,
-        #                                         labels=labels)
+        # Dict mapping noisy speech to clean speech
+        self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
+                                                dataset_type=dataset_type,
+                                                dataset_size=dataset_size,
+                                                labels=labels)
 
-        # # Convert dict to tuples
-        # self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
+        # Convert dict to tuples
+        self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
 
-        input_clean_file_paths, \
-            output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
-                                dataset_type=dataset_type)
+        #TODO: correct audio / target alignment (paths not matching)
+        # input_clean_file_paths, \
+        #     output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
+        #                         dataset_type=dataset_type)
 
-        self.noisy_clean_pair_paths = [(input_clean_file_path, output_clean_file_path)
-                        for input_clean_file_path, output_clean_file_path\
-                            in zip(input_clean_file_paths, output_clean_file_paths)]
+        # self.noisy_clean_pair_paths = [(input_clean_file_path, output_clean_file_path)
+        #                 for input_clean_file_path, output_clean_file_path\
+        #                     in zip(input_clean_file_paths, output_clean_file_paths)]
 
         self.dataset_len = len(self.noisy_clean_pair_paths) # total number of utterances
 
@@ -265,8 +275,8 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         (proc_noisy_file_path, clean_file_path) = self.noisy_clean_pair_paths[i]
         
         # Read noisy audio
-        # noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + proc_noisy_file_path)
-        noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + clean_file_path)
+        noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + proc_noisy_file_path)
+        # noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + clean_file_path)
         noisy_speech = noisy_speech[0] # 1channel
 
         # Normalize audio
@@ -289,8 +299,8 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         data = torch.log(data + 1e-8)
        
         # Read label
-        # output_h5_file = clean_file_path
-        output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '.h5'
+        output_h5_file = clean_file_path
+        # output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '.h5'
 
         with h5.File(output_h5_file, 'r') as file:
             label = np.array(file["Y"][:])

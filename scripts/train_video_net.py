@@ -80,9 +80,7 @@ if labels == 'ibm_labels':
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-# output_h5_dir = input_video_dir + os.path.join(dataset_name + '_statistics_' + '.h5')
-output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
-# output_h5_dir = input_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
 
 #####################################################################################################
 
@@ -173,7 +171,7 @@ def main():
             # y_hat_soft = torch.squeeze(y_hat_soft)
             loss = 0.
             for (length, pred, target) in zip(lengths, y_hat_soft, y):
-                loss += binary_cross_entropy(pred[:length], target[:length])
+                loss += binary_cross_entropy(pred[:length], target[:length], eps)
             # loss /= len(lengths)
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
             
@@ -245,7 +243,7 @@ def main():
                 # y_hat_soft = torch.squeeze(y_hat_soft)
                 loss = 0.
                 for (length, pred, target) in zip(lengths, y_hat_soft, y):
-                    loss += binary_cross_entropy(pred[:length], target[:length])
+                    loss += binary_cross_entropy(pred[:length], target[:length], eps)
                 # loss /= len(lengths)
 
                 total_loss += loss.item()

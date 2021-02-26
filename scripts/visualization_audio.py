@@ -55,21 +55,22 @@ dtype = 'complex64' # STFT data type
 
 ## Noise robust VAD
 eps = 1e-8
+# quantile_fraction_end = 0.999
+# quantile_weight = 0.999
 # quantile_fraction_begin = 0.93
 quantile_fraction_begin = 0.5
-# quantile_fraction_end = 0.999
 quantile_fraction_end = 0.55
-# quantile_weight = 0.999
 quantile_weight = 1.0
 
 ## Noise robust IBM
+eps = 1e-8
+# vad_quantile_fraction_end = 0.999
+# ibm_quantile_fraction = 0.999
+# ibm_quantile_weight = 0.999
 # vad_quantile_fraction_begin = 0.93
 vad_quantile_fraction_begin = 0.5
-# vad_quantile_fraction_end = 0.999
 vad_quantile_fraction_end = 0.55
-# ibm_quantile_fraction = 0.999
 ibm_quantile_fraction = 0.25
-# ibm_quantile_weight = 0.999
 ibm_quantile_weight = 1.0
 
 ## Plot spectrograms
@@ -135,7 +136,8 @@ def process_audio(args):
         speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
                                             quantile_fraction_begin=quantile_fraction_begin,
                                             quantile_fraction_end=quantile_fraction_end,
-                                            quantile_weight=quantile_weight)
+                                            quantile_weight=quantile_weight,
+                                            eps=eps)
         label = speech_vad
 
     if labels == 'ibm_labels':
@@ -145,7 +147,8 @@ def process_audio(args):
                                             vad_quantile_fraction_begin=vad_quantile_fraction_begin,
                                             vad_quantile_fraction_end=vad_quantile_fraction_end,
                                             ibm_quantile_fraction=ibm_quantile_fraction,
-                                            quantile_weight=ibm_quantile_weight)   
+                                            quantile_weight=ibm_quantile_weight,
+                                            eps=eps)   
         # speech_ibm = clean_speech_IBM(s_tf_torch,
         #                               quantile_fraction=ibm_quantile_fraction,
         #                               quantile_weight=ibm_quantile_weight,

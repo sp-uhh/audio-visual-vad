@@ -48,13 +48,6 @@ def video_list(input_video_dir,
 
     # List of files
     file_paths = sorted(glob(data_dir + '**/*.mat',recursive=True))
-    if not file_paths:
-        if upsampled:
-            file_paths = sorted(glob(data_dir + '**/*' + '_' + labels + '_upsampled.h5',recursive=True))
-            
-            # file_paths = sorted(glob(data_dir + '**/*' + '_' + 'ntcd_proc' + '_' + labels + '_upsampled.h5',recursive=True))
-        else:
-            file_paths = sorted(glob(data_dir + '**/*' + '_' + labels + '.h5',recursive=True))
 
     # Remove input_video_dir from file_paths
     file_paths = [os.path.relpath(path, input_video_dir) for path in file_paths]
@@ -110,6 +103,44 @@ def speech_list(input_speech_dir,
         output_file_paths.append(output_file_path)
         
     return file_paths, output_file_paths
+
+# dict mapping processed noisy file processed to clean file
+def proc_video_audio_pair_dict(input_video_dir,
+                dataset_type='train',
+                labels='vad_labels',
+                upsampled=False):
+    
+    video_dir = input_video_dir + 'ntcd_timit/matlab_raw/'
+    audio_dir = input_video_dir + 'ntcd_timit/Clean/'
+
+    ### Training data
+    if dataset_type == 'train':
+        video_dir += 'train/'
+        audio_dir += 'train/'
+
+    ### Validation data
+    if dataset_type == 'validation':
+        video_dir += 'dev/'
+        audio_dir += 'dev/'
+
+    ### Test data
+    if dataset_type == 'test':
+        video_dir += 'test/'
+        audio_dir += 'test/'
+
+    # List of files
+    if upsampled:
+        video_file_paths = sorted(glob(video_dir + '**/*' + '_upsampled' + '.h5',recursive=True))
+    else:
+        video_file_paths = sorted(glob(video_dir + '**/*' + '.h5',recursive=True))
+
+    audio_file_paths = sorted(glob(audio_dir + '**/*' + '.h5',recursive=True))
+    
+    # Remove input_video_dir from file_paths
+    video_file_paths = [os.path.relpath(path, input_video_dir) for path in video_file_paths]
+    audio_file_paths = [os.path.relpath(path, input_video_dir) for path in audio_file_paths]
+
+    return video_file_paths, audio_file_paths
 
 def noisy_speech_dict(input_speech_dir,
                 dataset_type='train',

@@ -70,7 +70,7 @@ class DeepVAD_video(nn.Module):
         # x /= self.std[None,:, None, None].to(x.device)
 
         x = self.features(x).squeeze() # output shape - Batch X Features X seq len
-        x = self.dropout(x)
+        # x = self.dropout(x)
         # Reshape to (batch , seq_len, Features)
         x = x.view(batch , frames, -1)
 

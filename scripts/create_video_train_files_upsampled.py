@@ -23,6 +23,8 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
 
 ## Dataset
+# dataset_types = ['train']
+# dataset_types = ['validation']
 dataset_types = ['train', 'validation']
 # dataset_types = ['test']
 
@@ -52,16 +54,17 @@ width = 67
 height = 67
 crf = 0 #set the constant rate factor to 0, which is lossless
 
-## Noise robust VAD
-vad_quantile_fraction_begin = 0.93
-vad_quantile_fraction_end = 0.999
-vad_quantile_weight = 0.999
-
-## Noise robust IBM
-vad_quantile_fraction_begin = 0.93
-vad_quantile_fraction_end = 0.999
-ibm_quantile_fraction = 0.999
-ibm_quantile_weight = 0.999
+## Noise robust VAD / IBM
+# vad_quantile_fraction_begin = 0.93
+# vad_quantile_fraction_end = 0.999
+# ibm_quantile_fraction = 0.999
+# ibm_quantile_weight = 0.999
+eps = 1e-8
+vad_quantile_fraction_begin = 0.5
+vad_quantile_fraction_end = 0.55
+vad_quantile_weight = 1.0
+ibm_quantile_fraction = 0.25
+ibm_quantile_weight = 1.0
 
 # HDF5 parameters
 rdcc_nbytes = 1024**2*40 # The number of bytes to use for the chunk cache
@@ -95,43 +98,10 @@ compression = 'lzf'
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'raw/')
 output_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + labels + '_statistics_upsampled' + '.h5')
-# output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
 
 def process_write_video(args):
     # Separate args
-    mat_file_path, audio_file_path  = args[0], args[1]
-
-    # Read clean speech
-    speech, fs_speech = sf.read(input_video_dir + audio_file_path, samplerate=None)
-
-    if fs != fs_speech:
-        raise ValueError('Unexpected sampling rate')
-
-    # Normalize audio
-    speech = speech/(np.max(np.abs(speech)))
-
-    # TF reprepsentation
-    speech_tf = stft(speech,
-                    fs=fs,
-                    wlen_sec=wlen_sec,
-                    win=win, 
-                    hop_percent=hop_percent,
-                    center=center,
-                    pad_mode=pad_mode,
-                    pad_at_end=pad_at_end,
-                    dtype=dtype) # shape = (freq_bins, frames)
-
-    if dataset_size == 'subset':
-        # Save .wav files, just to check if it working
-        output_path = output_video_dir + audio_file_path
-        output_path = os.path.splitext(output_path)[0]
-
-        if not os.path.exists(os.path.dirname(output_path)):
-            os.makedirs(os.path.dirname(output_path))
-        
-        sf.write(output_path + '_s.wav', speech, fs)
-        # sf.write(output_path + '_x.wav', mixture, fs)
+    input_clean_file_path, output_clean_file_path, mat_file_path = args[0], args[1], args[2]
 
     # Read video
     with h5.File(input_video_dir + mat_file_path, 'r') as vfile:
@@ -176,6 +146,26 @@ def process_write_video(args):
         # video = matlab_frames_list_per_user.swapaxes(0,1)
         # video = video.reshape(height, width, -1)
         # # video = np.repeat(video[:,:,None],3,axis=2)
+    
+    # Read clean speech
+    speech, fs_speech = sf.read(input_video_dir + input_clean_file_path, samplerate=None)
+
+    if fs != fs_speech:
+        raise ValueError('Unexpected sampling rate')
+
+    # Normalize audio
+    speech = speech/(np.max(np.abs(speech)))
+
+    # TF reprepsentation
+    speech_tf = stft(speech,
+                    fs=fs,
+                    wlen_sec=wlen_sec,
+                    win=win, 
+                    hop_percent=hop_percent,
+                    center=center,
+                    pad_mode=pad_mode,
+                    pad_at_end=pad_at_end,
+                    dtype=dtype) # shape = (freq_bins, frames)
 
     if labels == 'vad_labels':
         # Compute vad
@@ -201,9 +191,8 @@ def process_write_video(args):
     if label.shape[-1] > video.shape[-1]:
         label = label[...,:video.shape[-1]]
 
-    # Store data and label in h5_file
+    # Store data in h5_file
     output_h5_file = output_video_dir + mat_file_path
-    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + 'ntcd_proc' + '_' + labels + '_upsampled.h5'
     output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '_upsampled.h5'
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
@@ -219,20 +208,39 @@ def process_write_video(args):
         # Faster writing if you know the shape in advance
         # Size of chunks corresponds to one spectrogram frame
         f.create_dataset('X', shape=X_shape, dtype='float32', maxshape=X_maxshape, chunks=None, compression=compression)
-        f.create_dataset('Y', shape=Y_shape, dtype='float32', maxshape=Y_maxshape, chunks=None, compression=compression)
 
         # Store dataset in variables for faster I/O
         fx = f['X']
-        fy = f['Y']
 
         # Store spectrogram in dataset
         fx.resize((fx.shape[-1] + video.shape[-1]), axis = len(fx.shape)-1)
         fx[...,-video.shape[-1]:] = video
 
+    # Store label in h5_file
+    output_h5_file = output_video_dir + output_clean_file_path
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '.h5'
+
+    if not os.path.exists(os.path.dirname(output_h5_file)):
+        os.makedirs(os.path.dirname(output_h5_file))
+
+    # Remove file if already exists
+    if os.path.exists(output_h5_file):
+        os.remove(output_h5_file)
+
+    with h5.File(output_h5_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:    
+        
+        # Exact shape of dataset is unknown in advance unfortunately
+        # Faster writing if you know the shape in advance
+        # Size of chunks corresponds to one spectrogram frame
+        f.create_dataset('Y', shape=Y_shape, dtype='float32', maxshape=Y_maxshape, chunks=None, compression=compression)
+
+        # Store dataset in variables for faster I/O
+        fy = f['Y']
+
         # Store spectrogram in label
         fy.resize((fy.shape[-1] + label.shape[-1]), axis = len(fy.shape)-1)
         fy[...,-label.shape[-1]:] = label
-
+    
     # Compute mean, std
     if dataset_type == 'train':
         # VAR = E[X**2] - E[X]**2
@@ -244,9 +252,6 @@ def process_write_video(args):
 
 def main():
     
-    if not os.path.exists(os.path.dirname(output_dataset_file)):
-        os.makedirs(os.path.dirname(output_dataset_file))
-
     global dataset_type
 
     for dataset_type in dataset_types:
@@ -259,8 +264,9 @@ def main():
             output_clean_file_paths = speech_list(input_speech_dir=input_video_dir,
                                 dataset_type=dataset_type)
 
-        args = [[mat_file_path, input_clean_file_path]
-                        for mat_file_path, input_clean_file_path in zip(mat_file_paths, input_clean_file_paths)]
+        args = [[input_clean_file_path, output_clean_file_path, mat_file_path]
+                        for input_clean_file_path, output_clean_file_path, mat_file_path\
+                            in zip(input_clean_file_paths, output_clean_file_paths, mat_file_paths)]
 
         # Compute mean, std of the train set
         if dataset_type == 'train':
@@ -290,6 +296,11 @@ def main():
             #NB: compute the empirical std (!= regular std)
             mean = channels_sum / n_samples
             std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
+
+            # Save statistics
+            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+            if not os.path.exists(os.path.dirname(output_dataset_file)):
+                os.makedirs(os.path.dirname(output_dataset_file))
 
             with h5.File(output_dataset_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:
                 # Delete datasets if already exists

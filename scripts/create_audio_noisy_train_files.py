@@ -48,16 +48,17 @@ center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectru
 pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 dtype = 'complex64'
-eps = 1e-8
 
 ## Noise robust IBM
 # vad_quantile_fraction_begin = 0.93
-vad_quantile_fraction_begin = 0.5
 # vad_quantile_fraction_end = 0.999
-vad_quantile_fraction_end = 0.55
 # ibm_quantile_fraction = 0.999
-ibm_quantile_fraction = 0.25
 # ibm_quantile_weight = 0.999
+eps = 1e-8
+vad_quantile_fraction_begin = 0.5
+vad_quantile_fraction_end = 0.55
+vad_quantile_weight = 1.0
+ibm_quantile_fraction = 0.25
 ibm_quantile_weight = 1.0
 
 # HDF5 parameters
@@ -88,7 +89,6 @@ compression = 'lzf'
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'raw/')
 output_video_dir = os.path.join('data', dataset_size, 'processed/')
-# output_dataset_file = output_video_dir + os.path.join(dataset_name + '_' + 'ntcd_proc' + '_' + labels + '_statistics_upsampled' + '.h5')
 
 def process_write_label(args):
     # Separate args
@@ -124,7 +124,8 @@ def process_write_label(args):
         speech_vad = noise_robust_clean_speech_VAD(speech_tf,
                                             quantile_fraction_begin=vad_quantile_fraction_begin,
                                             quantile_fraction_end=vad_quantile_fraction_end,
-                                            quantile_weight=vad_quantile_weight)
+                                            quantile_weight=vad_quantile_weight,
+                                            eps=eps)
 
         label = speech_vad
 
@@ -134,25 +135,27 @@ def process_write_label(args):
                                             vad_quantile_fraction_begin=vad_quantile_fraction_begin,
                                             vad_quantile_fraction_end=vad_quantile_fraction_end,
                                             ibm_quantile_fraction=ibm_quantile_fraction,
-                                            quantile_weight=ibm_quantile_weight)
+                                            quantile_weight=ibm_quantile_weight,
+                                            eps=eps)
         # speech_ibm = clean_speech_IBM(speech_tf,
         #                               quantile_fraction=ibm_quantile_fraction,
-        #                               quantile_weight=ibm_quantile_weight)
+        #                               quantile_weight=ibm_quantile_weight,
+        #                               eps=eps)
 
         label = speech_ibm
 
 
-    # # Read preprocessed video
-    # h5_file_path = output_video_dir + mat_file_path
-    # h5_file_path = os.path.splitext(h5_file_path)[0] + '_' + labels + '_upsampled.h5'
-    # with h5.File(h5_file_path, 'r') as file:
-    #     video = np.array(file["X"][:])
+    # Read preprocessed video
+    h5_file_path = output_video_dir + mat_file_path
+    h5_file_path = os.path.splitext(h5_file_path)[0] + '_' + labels + '_upsampled.h5'
+    with h5.File(h5_file_path, 'r') as file:
+        video = np.array(file["X"][:])
 
-    # # Reduce frames of video or label
-    # if label.shape[-1] < video.shape[-1]:
-    #     video = video[...,:label.shape[-1]]
-    # if label.shape[-1] > video.shape[-1]:
-    #     label = label[...,:video.shape[-1]]
+    # Reduce frames of video or label
+    if label.shape[-1] < video.shape[-1]:
+        video = video[...,:label.shape[-1]]
+    if label.shape[-1] > video.shape[-1]:
+        label = label[...,:video.shape[-1]]
 
     # Store data and label in h5_file
     output_h5_file = output_video_dir + output_clean_file_path
@@ -236,6 +239,9 @@ def process_write_noisy_audio(args):
     # Power spectrogram
     noisy_speech_tf = noisy_speech_tf.numpy()
     noisy_spectrogram = noisy_speech_tf[...,0]**2 + noisy_speech_tf[...,1]**2
+
+    # Apply log
+    spectrogram = np.log(noisy_spectrogram + eps)
     
     # Read preprocessed video corresponding to clean audio
     mat_file_path = clean_file_path.replace('Clean', 'matlab_raw')
@@ -290,18 +296,18 @@ def main():
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')
 
-        # # Dict mapping noisy speech to clean speech
-        # noisy_clean_pair_paths = noisy_clean_pair_dict(input_speech_dir=input_video_dir,
-        #                                     dataset_type=dataset_type,
-        #                                     dataset_size=dataset_size)
+        # Dict mapping noisy speech to clean speech
+        noisy_clean_pair_paths = noisy_clean_pair_dict(input_speech_dir=input_video_dir,
+                                            dataset_type=dataset_type,
+                                            dataset_size=dataset_size)
 
-        # # Dict mapping input noisy speech to output noisy speech
-        # noisy_input_output_pair_paths = noisy_speech_dict(input_speech_dir=input_video_dir,
-        #                                     dataset_type=dataset_type,
-        #                                     dataset_size=dataset_size)
+        # Dict mapping input noisy speech to output noisy speech
+        noisy_input_output_pair_paths = noisy_speech_dict(input_speech_dir=input_video_dir,
+                                            dataset_type=dataset_type,
+                                            dataset_size=dataset_size)
 
-        # # loop over inputs for the statistics
-        # args = list(noisy_clean_pair_paths.items())
+        # loop over inputs for the statistics
+        args = list(noisy_clean_pair_paths.items())
 
         # Compute mean, std of the train set
         if dataset_type == 'train':
@@ -316,9 +322,9 @@ def main():
             #     channels_sum += c_s
             #     channels_squared_sum += c_s_s
 
-            # # Save data on SSD....
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            #     train_stats = executor.map(process_write_noisy_audio, args)
+            # Save data on SSD....
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+                train_stats = executor.map(process_write_noisy_audio, args)
             
             for (n_s, c_s, c_s_s) in train_stats:
                 n_samples += n_s
@@ -334,8 +340,8 @@ def main():
             std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
 
             # Save statistics
-            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
             if not os.path.exists(os.path.dirname(output_dataset_file)):
                 os.makedirs(os.path.dirname(output_dataset_file))
 
@@ -352,18 +358,18 @@ def main():
                 f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
                 print('Mean and std saved in HDF5.')
         
-        # if dataset_type in ['validation', 'test']:
+        if dataset_type in ['validation', 'test']:
 
-        #     t1 = time.perf_counter()
+            t1 = time.perf_counter()
 
-        #     # for i, arg in tqdm(enumerate(args)):
-        #     #     process_write_noisy_audio(arg)
+            # for i, arg in tqdm(enumerate(args)):
+            #     process_write_noisy_audio(arg)
 
-        #     with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-        #         executor.map(process_write_noisy_audio, args)
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+                executor.map(process_write_noisy_audio, args)
 
-        #     t2 = time.perf_counter()
-        #     print(f'Finished in {t2 - t1} seconds')
+            t2 = time.perf_counter()
+            print(f'Finished in {t2 - t1} seconds')
 
 if __name__ == '__main__':
     main()
