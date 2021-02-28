@@ -377,6 +377,9 @@ def proc_noisy_clean_pair_dict(input_speech_dir,
         p = p.replace('_' + labels, '')
         p = p + '.wav'
         file_shortpaths.append(p)
+
+    # Remove input_speech_dir from clean_file_paths
+    clean_file_paths = [os.path.relpath(path, input_speech_dir) for path in clean_file_paths]
     
     # List of noise types
     noise_types = ['Babble', 'Cafe', 'Car', 'LR', 'Street', 'White']

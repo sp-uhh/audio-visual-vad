@@ -10,25 +10,30 @@ from tqdm import tqdm
 import h5py as h5
 
 from torch.utils.data import DataLoader
-# from video_net import VideoClassifier
-# from data_handling import VideoFrames
 
-from packages.data_handling import WavWholeSequenceSpectrogramLabeledFrames
-from packages.models.Video_Net import DeepVAD_video
-from packages.models.utils import binary_cross_entropy, binary_cross_entropy_2classes, f1_loss
-from packages.utils import count_parameters, my_collate, collate_many2many_video
+from packages.data_handling import AudioVisualSequenceLabeledFrames
+from packages.models.AV_Net import DeepVAD_AV
+from packages.models.utils import binary_cross_entropy, f1_loss
+from packages.utils import count_parameters, collate_many2many_AV
 
 # Dataset
 # dataset_size = 'subset'
 dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
-data_dir = 'export'
-upsampled = True
 
 # Labels
 # labels = 'vad_labels'
 labels = 'ibm_labels'
+
+## STFT
+fs = int(16e3) # Sampling rate
+wlen_sec = 64e-3 # window length in seconds
+hop_percent = 0.25 # hop size as a percentage of the window length
+win = 'hann' # type of window
+center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
+pad_mode = 'reflect' # This argument is ignored if center = False
+pad_at_end = True # pad audio file at end to match same size after stft + istft
 
 # System 
 cuda = torch.cuda.is_available()
@@ -54,12 +59,13 @@ if labels == 'ibm_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
+use_mcb=False
 batch_norm=False
 std_norm =True
 eps = 1e-8
 
 # Training
-batch_size = 16
+batch_size = 32
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -68,38 +74,34 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    # model_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
-    # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    # model_name = 'Video_Classifier_ibm_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    # model_name = 'Video_Classifier_ibm_ntcd_features_noresnet_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    # model_name = 'Video_Classifier_ibm_1channel_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_ibm_nodropout_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
 
 #####################################################################################################
 
 print('Load data')
-train_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
-                                                     dataset_type='train',
-                                                     labels=labels,
-                                                     upsampled=upsampled)
-valid_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
-                                                     dataset_type='validation',
-                                                     labels=labels,
-                                                     upsampled=upsampled)
+train_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
+                                                              dataset_size=dataset_size, labels=labels,
+                                                              fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
+                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
+valid_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
+                                                              dataset_size=dataset_size, labels=labels,
+                                                              fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
+                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_video)
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_video)
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
 
 print('- Number of training samples: {}'.format(len(train_dataset)))
 print('- Number of validation samples: {}'.format(len(valid_dataset)))
@@ -109,8 +111,7 @@ print('- Number of validation batches: {}'.format(len(valid_loader)))
 
 def main():
     print('Create model')
-    # model = VideoClassifier(lstm_layers, lstm_hidden_size)
-    model = DeepVAD_video(lstm_layers, lstm_hidden_size, y_dim)
+    model = DeepVAD_AV(lstm_layers, lstm_hidden_size, y_dim, use_mcb)
 
     if cuda: model = model.to(device)
 
@@ -124,17 +125,31 @@ def main():
         os.makedirs(model_dir)
 
     if std_norm:
-        print('Load mean and std')
-        with h5.File(output_h5_dir, 'r') as file:
-            mean = file['X_train_mean'][:]
-            std = file['X_train_std'][:]
+        # Audio
+        print('Load audio mean and std')
+        with h5.File(audio_h5_dir, 'r') as file:
+            audio_mean = file['X_train_mean'][:]
+            audio_std = file['X_train_std'][:]
 
         # Save mean and std
-        np.save(model_dir + '/' + 'trainset_mean.npy', mean)
-        np.save(model_dir + '/' + 'trainset_std.npy', std)
+        np.save(model_dir + '/' + 'trainset_audio_mean.npy', audio_mean)
+        np.save(model_dir + '/' + 'trainset_audio_std.npy', audio_std)
 
-        mean = torch.tensor(mean).to(device)
-        std = torch.tensor(std).to(device)
+        audio_mean = torch.tensor(audio_mean).to(device)
+        audio_std = torch.tensor(audio_std).to(device)
+
+        # Video
+        print('Load video mean and std')
+        with h5.File(video_h5_dir, 'r') as file:
+            video_mean = file['X_train_mean'][:]
+            video_std = file['X_train_std'][:]
+
+        # Save mean and std
+        np.save(model_dir + '/' + 'trainset_video_mean.npy', video_mean)
+        np.save(model_dir + '/' + 'trainset_video_std.npy', video_std)
+
+        video_mean = torch.tensor(video_mean).to(device)
+        video_std = torch.tensor(video_std).to(device)
 
     # Start log file
     file = open(model_dir + '/' +'output_batch.log','w') 
@@ -143,7 +158,6 @@ def main():
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
     # criterion = nn.CrossEntropyLoss().to(device) # Ignore padding in the loss
-
 
     t = len(train_loader)
     m = len(valid_loader)
@@ -154,23 +168,29 @@ def main():
         model.train()
         total_loss, total_accuracy, total_precision, total_recall, total_f1_score = (0, 0, 0, 0, 0)
         # for batch_idx, (x, y) in enumerate(train_loader):
-        for batch_idx, (lengths, x, y) in tqdm(enumerate(train_loader)):
+        for batch_idx, (lengths, x, v, y) in tqdm(enumerate(train_loader)):
             if cuda:
-                # x, y = x.to(device), y.long().to(device)
-                x, y, lengths = x.to(device, non_blocking=non_blocking), y.long().to(device, non_blocking=non_blocking), lengths.to(device, non_blocking=non_blocking)
+                x, v, y, lengths = x.to(device, non_blocking=non_blocking),\
+                                    v.to(device, non_blocking=non_blocking),\
+                                        y.long().to(device, non_blocking=non_blocking),\
+                                            lengths.to(device, non_blocking=non_blocking)
 
             # Normalize power spectrogram
             if std_norm:
-                x_norm = x - mean.T
-                x_norm /= (std + eps).T
+                x_norm = x - audio_mean.T
+                x_norm /= (audio_std + eps).T
 
-                y_hat_soft = model(x_norm, lengths) 
+                v_norm = v - video_mean.T
+                v_norm /= (video_std + eps).T
+
+                y_hat_soft = model(x_norm, v_norm, lengths) 
             else:
-                y_hat_soft = model(x, lengths)
+                y_hat_soft = model(x, v, lengths)
 
             # y_hat_soft = torch.squeeze(y_hat_soft)
             loss = 0.
             for (length, pred, target) in zip(lengths, y_hat_soft, y):
+                # loss += binary_cross_entropy(pred[:length], target[:length])
                 loss += binary_cross_entropy(pred[:length], target[:length], eps)
             # loss /= len(lengths)
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
@@ -183,6 +203,7 @@ def main():
             # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
             y_hat_soft = torch.sigmoid(y_hat_soft.detach())
             y_hat_hard = (y_hat_soft > 0.5).int()
+            # y_hat_hard = (y_hat_soft.detach() > 0.5).int()
 
             # exclude padding from F1-score
             y_hat_hard_batch, y_batch = [], []
@@ -226,19 +247,24 @@ def main():
             
             total_loss, total_accuracy, total_precision, total_recall, total_f1_score = (0, 0, 0, 0, 0)
             
-            for batch_idx, (lengths, x, y) in tqdm(enumerate(valid_loader)):
-
+            for batch_idx, (lengths, x, v, y) in tqdm(enumerate(train_loader)):
                 if cuda:
-                    x, y, lengths = x.to(device, non_blocking=non_blocking), y.long().to(device, non_blocking=non_blocking), lengths.to(device, non_blocking=non_blocking)
+                    x, v, y, lengths = x.to(device, non_blocking=non_blocking),\
+                                        v.to(device, non_blocking=non_blocking),\
+                                            y.long().to(device, non_blocking=non_blocking),\
+                                                lengths.to(device, non_blocking=non_blocking)
 
                 # Normalize power spectrogram
                 if std_norm:
-                    x_norm = x - mean.T
-                    x_norm /= (std + eps).T
+                    x_norm = x - audio_mean.T
+                    x_norm /= (audio_std + eps).T
 
-                    y_hat_soft = model(x_norm, lengths) 
+                    v_norm = v - video_mean.T
+                    v_norm /= (video_std + eps).T
+
+                    y_hat_soft = model(x_norm, v_norm, lengths) 
                 else:
-                    y_hat_soft = model(x, lengths)
+                    y_hat_soft = model(x, v, lengths)
                 
                 # y_hat_soft = torch.squeeze(y_hat_soft)
                 loss = 0.
@@ -250,6 +276,7 @@ def main():
                 # _, y_hat_hard = torch.max(y_hat_soft.data, 1)
                 y_hat_soft = torch.sigmoid(y_hat_soft.detach())
                 y_hat_hard = (y_hat_soft > 0.5).int()
+                # y_hat_hard = (y_hat_soft.detach() > 0.5).int()
 
                 # exclude padding from F1-score
                 y_hat_hard_batch, y_batch = [], []

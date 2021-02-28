@@ -234,7 +234,7 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
                  input_video_dir, dataset_type,
                  dataset_size, labels='vad_labels',
                  fs=16000, wlen_sec=64e-3, win='hann', hop_percent=0.25,
-                 center=True, pad_mode='reflect', pad_at_end=True):
+                 center=True, pad_mode='reflect', pad_at_end=True, eps=1e-8):
         # Do not load hdf5 in __init__ if num_workers > 0
         self.input_video_dir = input_video_dir
         self.dataset_type = dataset_type
@@ -249,6 +249,7 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         self.center = center
         self.pad_mode = pad_mode
         self.pad_at_end = pad_at_end
+        self.eps = eps
 
         # Dict mapping noisy speech to clean speech
         self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
@@ -296,7 +297,7 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         data = noisy_speech_tf[...,0]**2 + noisy_speech_tf[...,1]**2
 
         # Apply log
-        data = torch.log(data + 1e-8)
+        data = torch.log(data + self.eps)
        
         # Read label
         output_h5_file = clean_file_path
@@ -306,7 +307,7 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
             label = np.array(file["Y"][:])
             label = torch.Tensor(label)
 
-        # Reduce frames of video or label
+        # Reduce frames of audio or label
         if label.shape[-1] < data.shape[-1]:
             data = data[...,:label.shape[-1]]
         if label.shape[-1] > data.shape[-1]:
@@ -316,6 +317,96 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         length = data.shape[-1]
         
         return data, label, length #, length # Take only the last label
+
+    def __len__(self):
+        return self.dataset_len
+
+class AudioVisualSequenceLabeledFrames(Dataset):
+    def __init__(self,
+                 input_video_dir, dataset_type,
+                 dataset_size, labels='vad_labels',
+                 fs=16000, wlen_sec=64e-3, win='hann', hop_percent=0.25,
+                 center=True, pad_mode='reflect', pad_at_end=True, eps=1e-8):
+        # Do not load hdf5 in __init__ if num_workers > 0
+        self.input_video_dir = input_video_dir
+        self.dataset_type = dataset_type
+        self.dataset_size = dataset_size        
+        self.labels = labels
+
+        # STFT parameters
+        self.fs = fs
+        self.wlen_sec = wlen_sec
+        self.win = win
+        self.hop_percent = hop_percent
+        self.center = center
+        self.pad_mode = pad_mode
+        self.pad_at_end = pad_at_end
+        self.eps = eps
+
+        # Dict mapping noisy speech to clean speech
+        self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
+                                                                 dataset_type=dataset_type,
+                                                                 dataset_size=dataset_size,
+                                                                 labels=labels)
+
+        # Convert dict to tuples
+        self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
+
+        self.dataset_len = len(self.noisy_clean_pair_paths) # total number of utterances
+
+    def __getitem__(self, i):
+        # select utterance
+        (proc_noisy_file_path, clean_file_path) = self.noisy_clean_pair_paths[i]
+        
+        # Read noisy audio
+        noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + proc_noisy_file_path)
+        # noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + clean_file_path)
+        noisy_speech = noisy_speech[0] # 1channel
+
+        # Normalize audio
+        noisy_speech = noisy_speech / (torch.max(torch.abs(noisy_speech)))
+
+        # TF representation (PyTorch)
+        noisy_speech_tf = stft_pytorch(noisy_speech,
+                fs=self.fs,
+                wlen_sec=self.wlen_sec,
+                win=self.win, 
+                hop_percent=self.hop_percent,
+                center=self.center,
+                pad_mode=self.pad_mode,
+                pad_at_end=self.pad_at_end) # shape = (freq_bins, frames)
+
+        # Power spectrogram
+        noisy_spectrogram = noisy_speech_tf[...,0]**2 + noisy_speech_tf[...,1]**2
+
+        # Apply log
+        noisy_spectrogram = torch.log(noisy_spectrogram + self.eps)
+       
+        # Read video
+        output_h5_file = clean_file_path.replace('Clean', 'matlab_raw')
+        output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+        output_h5_file = self.input_video_dir + output_h5_file
+
+        # Open HDF5 file
+        with h5.File(output_h5_file, 'r') as file:
+            video = np.array(file["X"][:])
+            video = torch.Tensor(video)
+
+        # Read label
+        output_h5_file = self.input_video_dir + clean_file_path
+
+        with h5.File(output_h5_file, 'r') as file:
+            label = np.array(file["Y"][:])
+            label = torch.Tensor(label)
+
+        # Reduce frames of audio, video or label
+        length = min(noisy_spectrogram.shape[-1], video.shape[-1], label.shape[-1])
+
+        noisy_spectrogram = noisy_spectrogram[...,:length]
+        video = video[...,:length]
+        label = label[...,:length]
+                
+        return noisy_spectrogram, video, label, length #, length # Take only the last label
 
     def __len__(self):
         return self.dataset_len

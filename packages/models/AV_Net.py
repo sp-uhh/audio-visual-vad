@@ -2,27 +2,26 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 import torch.nn.functional as F
-from networks.wavenet_autoencoder import wavenet_autoencoder
-from networks.compact_bilinear_pooling import CountSketch, CompactBilinearPooling
+# from networks.wavenet_autoencoder import wavenet_autoencoder
+from .compact_bilinear_pooling import CountSketch, CompactBilinearPooling
 from torch.autograd import Variable
-from utils.utils import weights_init_normal
+from .utils import weights_init_normal
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 # Audio_Visual network
 class DeepVAD_AV(nn.Module):
-
-    def __init__(self, args):
+    def __init__(self, lstm_layers, lstm_hidden_size, y_dim, use_mcb=False):
         super(DeepVAD_AV, self).__init__()
 
-        self.lstm_layers = args.lstm_layers
-        self.lstm_hidden_size = args.lstm_hidden_size
-        self.batch_size = args.batch_size
-        self.test_batch_size = args.test_batch_size
+        self.lstm_layers = lstm_layers
+        self.lstm_hidden_size = lstm_hidden_size
+        self.y_dim = y_dim
         self.dropout = nn.Dropout(p=0.05)
-        self.use_mcb = args.use_mcb
+        self.use_mcb = use_mcb
 
         # video related init
 
-        resnet = models.resnet18(pretrained=True)  # set self.num_video_ftrs = 512
+        resnet = models.resnet18(pretrained=False)  # set self.num_video_ftrs = 512
 
         self.num_video_ftrs = 512
         self.features = nn.Sequential(
@@ -31,21 +30,15 @@ class DeepVAD_AV(nn.Module):
 
         #audio related init
 
-        import json
-        with open('./params/model_params.json', 'r') as f:
-            params = json.load(f)
-
-        self.wavenet_en = wavenet_autoencoder(
-            **params)  # filter_width, dilations, dilation_channels, residual_channels, skip_channels, quantization_channels, use_bias
-
-        self.num_audio_ftrs = params["en_bottleneck_width"]
-        self.bn = torch.nn.BatchNorm1d(params["en_bottleneck_width"], eps=1e-05, momentum=0.1, affine=True)
+        self.num_audio_ftrs = 513
 
         # general init
 
         if self.use_mcb:
-            self.lstm_input_size = self.mcb_output_size = args.mcb_output_size
-            self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size).cuda()
+            self.mcb_output_size = 1024
+            self.lstm_input_size = self.mcb_output_size
+            # self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size).cuda()
+            self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size)
             self.mcb_bn = torch.nn.BatchNorm1d(self.mcb_output_size, eps=1e-05, momentum=0.1, affine=True)
         else:
             self.lstm_input_size = self.num_audio_ftrs + self.num_video_ftrs
@@ -55,10 +48,7 @@ class DeepVAD_AV(nn.Module):
                             num_layers=self.lstm_layers,
                             bidirectional=False)
 
-        # self.vad_merged = nn.Linear(self.lstm_hidden_size, 2)
-        # DC
-        self.vad_merged = nn.Linear(self.lstm_hidden_size, 257)
-        # endDC
+        self.vad_merged = nn.Linear(self.lstm_hidden_size, y_dim)
 
     def weight_init(self, mean=0.0, std=0.02):
         for m in self.named_parameters():
@@ -72,28 +62,37 @@ class DeepVAD_AV(nn.Module):
             return (Variable(torch.zeros(self.lstm_layers, self.test_batch_size, self.lstm_hidden_size)).cuda(),
                     Variable(torch.zeros(self.lstm_layers, self.test_batch_size, self.lstm_hidden_size)).cuda())
 
-    def forward(self, audio, video, h):
+    def forward(self, audio, video, lengths):
 
         # Video branch
-        batch,frames,channels,height,width = video.squeeze().size()
+        batch, frames, height, width = video.size()
+        channels = 3
+        
+        # Duplicate x to fit ResNet
+        video = video.unsqueeze(2).repeat(1, 1, channels, 1, 1) # batch, frames, channels, height, width
+        
         # Reshape to (batch * seq_len, channels, height, width)
         video = video.view(batch*frames,channels,height,width)
+        
         video = self.features(video).squeeze() # output shape - Batch X Features X seq len
-        video = self.dropout(video)
+        # video = self.dropout(video)
+        
+        # # Reshape to (seq_len, batch, Features)
+        # video = video.permute(1, 0, 2)
+        
         # Reshape to (batch , seq_len, Features)
         video = video.view(batch , frames, -1)
-        # Reshape to (seq_len, batch, Features)
-        video = video.permute(1, 0, 2)
-
+        
         # Audio branch
-        audio = self.wavenet_en(audio) # output shape - Batch X Features X seq len
-        audio = self.bn(audio)
-        audio = self.dropout(audio)  # output shape - Batch X Features X seq len
+        # audio = self.wavenet_en(audio) # output shape - Batch X Features X seq len
+        # audio = self.bn(audio)
+        # audio = self.dropout(audio)  # output shape - Batch X Features X seq len
         # Reshape to (seq_len, batch, input_size)
-        audio = audio.permute(2, 0, 1)
+        # audio = audio.permute(2, 0, 1)
 
         # Merging branches
         if self.use_mcb:
+            #TODO: modify
             y = self.mcb(audio, video)
             # signed square root
             y =  torch.mul(torch.sign(x), torch.sqrt(torch.abs(x) + 1e-12)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
@@ -106,11 +105,20 @@ class DeepVAD_AV(nn.Module):
 
         else:
             y = torch.cat([audio,video],dim=2)
-
+      
         # Merged branch
-        y = self.dropout(y)
-        out, h = self.lstm_merged(y, h)  # output shape - seq len X Batch X lstm size
-        out = self.dropout(out[-1]) # select last time step. many -> one
-        out = F.sigmoid(self.vad_merged(out))
+        total_length = y.size(1) # to make unpacking work with DataParallel
+        y = pack_padded_sequence(y, lengths=lengths, enforce_sorted=False, batch_first=True)
+
+        # y = self.dropout(y)
+        # out, h = self.lstm_merged(y, h)  # output shape - seq len X Batch X lstm size
+        out, _ = self.lstm_merged(y)  # output shape - seq len X Batch X lstm size
+        # out = self.dropout(out[-1]) # select last time step. many -> one
+        
+        # Unpack the feature vector & get last output
+        out, lens_unpacked = pad_packed_sequence(out, batch_first=True, total_length=total_length) # to make unpacking work with DataParallel
+        
+        # out = F.sigmoid(self.vad_merged(out))
+        out = self.vad_merged(out)
         return out
 

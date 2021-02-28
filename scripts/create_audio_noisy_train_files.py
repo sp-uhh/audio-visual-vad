@@ -161,8 +161,7 @@ def process_write_label(args):
     output_h5_file = output_video_dir + output_clean_file_path
     output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '.h5'
 
-    if not os.path.exists(os.path.dirname(output_h5_file)):
-        os.makedirs(os.path.dirname(output_h5_file))
+    os.makedirs(os.path.dirname(output_h5_file), exist_ok=True)
 
     # Remove file if already exists
     if os.path.exists(output_h5_file):
@@ -211,8 +210,7 @@ def process_write_noisy_audio(args):
     ouput_noisy_file_path = noisy_input_output_pair_paths[noisy_file_path]
     ouput_noisy_file_path = output_video_dir + ouput_noisy_file_path
     
-    if not os.path.exists(os.path.dirname(ouput_noisy_file_path)):
-        os.makedirs(os.path.dirname(ouput_noisy_file_path))
+    os.makedirs(os.path.dirname(ouput_noisy_file_path), exist_ok=True)
 
     copyfile(input_video_dir + noisy_file_path, ouput_noisy_file_path)
 
@@ -290,8 +288,8 @@ def main():
         # for i, arg in tqdm(enumerate(args)):
         #     process_write_label(arg)
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            train_stats = executor.map(process_write_label, args)
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+        #     train_stats = executor.map(process_write_label, args)
 
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')
@@ -342,8 +340,7 @@ def main():
             # Save statistics
             output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
             # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-            if not os.path.exists(os.path.dirname(output_dataset_file)):
-                os.makedirs(os.path.dirname(output_dataset_file))
+            os.makedirs(os.path.dirname(output_dataset_file), exist_ok=True)
 
             with h5.File(output_dataset_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:
                 # Delete datasets if already exists

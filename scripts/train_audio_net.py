@@ -91,11 +91,11 @@ print('Load data')
 train_dataset = NoisyWavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
                                                               dataset_size=dataset_size, labels=labels,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
-                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end)
+                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
 valid_dataset = NoisyWavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
                                                               dataset_size=dataset_size, labels=labels,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
-                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end)                                                              
+                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
