@@ -401,12 +401,15 @@ class AudioVisualSequenceLabeledFrames(Dataset):
 
         # Reduce frames of audio, video or label
         length = min(noisy_spectrogram.shape[-1], video.shape[-1], label.shape[-1])
-
         noisy_spectrogram = noisy_spectrogram[...,:length]
         video = video[...,:length]
         label = label[...,:length]
+
+        # length = label.shape[-1]
+        # time_length = noisy_speech.shape[-1]
                 
-        return noisy_spectrogram, video, label, length #, length # Take only the last label
+        return noisy_spectrogram, video, label, length
+        # return noisy_speech, video, label, length, time_length
 
     def __len__(self):
         return self.dataset_len

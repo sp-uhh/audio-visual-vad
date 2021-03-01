@@ -15,6 +15,7 @@ from packages.data_handling import AudioVisualSequenceLabeledFrames
 from packages.models.AV_Net import DeepVAD_AV
 from packages.models.utils import binary_cross_entropy, f1_loss
 from packages.utils import count_parameters, collate_many2many_AV
+from packages.processing.stft import stft_pytorch
 
 # Dataset
 # dataset_size = 'subset'
@@ -59,7 +60,7 @@ if labels == 'ibm_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
-use_mcb=False
+use_mcb=True
 batch_norm=False
 std_norm =True
 eps = 1e-8
@@ -111,7 +112,7 @@ print('- Number of validation batches: {}'.format(len(valid_loader)))
 
 def main():
     print('Create model')
-    model = DeepVAD_AV(lstm_layers, lstm_hidden_size, y_dim, use_mcb)
+    model = DeepVAD_AV(lstm_layers, lstm_hidden_size, y_dim, use_mcb, eps)
 
     if cuda: model = model.to(device)
 
@@ -174,6 +175,22 @@ def main():
                                     v.to(device, non_blocking=non_blocking),\
                                         y.long().to(device, non_blocking=non_blocking),\
                                             lengths.to(device, non_blocking=non_blocking)
+
+            # # TF representation (PyTorch)
+            # x = stft_pytorch(x,
+            #         fs=fs,
+            #         wlen_sec=wlen_sec,
+            #         win=win, 
+            #         hop_percent=hop_percent,
+            #         center=center,
+            #         pad_mode=pad_mode,
+            #         pad_at_end=pad_at_end) # shape = (freq_bins, frames)
+
+            # # Power spectrogram
+            # x = x[...,0]**2 + x[...,1]**2
+
+            # # Apply log
+            # x = torch.log(x + eps)
 
             # Normalize power spectrogram
             if std_norm:
@@ -247,13 +264,14 @@ def main():
             
             total_loss, total_accuracy, total_precision, total_recall, total_f1_score = (0, 0, 0, 0, 0)
             
-            for batch_idx, (lengths, x, v, y) in tqdm(enumerate(train_loader)):
+            for batch_idx, (lengths, x, v, y) in tqdm(enumerate(valid_loader)):
                 if cuda:
                     x, v, y, lengths = x.to(device, non_blocking=non_blocking),\
                                         v.to(device, non_blocking=non_blocking),\
                                             y.long().to(device, non_blocking=non_blocking),\
                                                 lengths.to(device, non_blocking=non_blocking)
-
+                    # x, v, y = x.to(device, non_blocking=non_blocking),\
+                                            # y.long().to(device, non_blocking=non_blocking)
                 # Normalize power spectrogram
                 if std_norm:
                     x_norm = x - audio_mean.T

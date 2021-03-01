@@ -10,7 +10,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 # Audio_Visual network
 class DeepVAD_AV(nn.Module):
-    def __init__(self, lstm_layers, lstm_hidden_size, y_dim, use_mcb=False):
+    def __init__(self, lstm_layers, lstm_hidden_size, y_dim, use_mcb=False, eps=1e-8):
         super(DeepVAD_AV, self).__init__()
 
         self.lstm_layers = lstm_layers
@@ -18,6 +18,7 @@ class DeepVAD_AV(nn.Module):
         self.y_dim = y_dim
         self.dropout = nn.Dropout(p=0.05)
         self.use_mcb = use_mcb
+        self.eps = eps
 
         # video related init
 
@@ -95,7 +96,8 @@ class DeepVAD_AV(nn.Module):
             #TODO: modify
             y = self.mcb(audio, video)
             # signed square root
-            y =  torch.mul(torch.sign(x), torch.sqrt(torch.abs(x) + 1e-12)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
+            # y =  torch.mul(torch.sign(x), torch.sqrt(torch.abs(x) + 1e-12)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
+            y =  torch.mul(torch.sign(y), torch.sqrt(torch.abs(y) + self.eps)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
             # L2 normalization
             y = y / torch.norm(y, p=2).detach()
 
