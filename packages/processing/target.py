@@ -23,12 +23,14 @@ def clean_speech_IBM(observations,
     # threshold = np.min(sorted_power[lorenz_function < quantile_fraction])
     threshold = sorted_power[lorenz_function < quantile_fraction][-1]
     threshold += min_power
-    mask = power > threshold
+    # mask = power > threshold
+    # mask = power > np.max(power) - 65
+    mask = power > np.max(power) - 50
     mask = 0.5 + quantile_weight * (mask - 0.5)
     mask = np.round(mask) # to have either 0 or 1 values
     if mask.dtype != 'float32':
         mask = np.float32(mask) # convert to float32
-    return mask
+    return mask, sorted_power
 
 def clean_speech_VAD(observations,
                      quantile_fraction=0.98,
@@ -50,7 +52,8 @@ def clean_speech_VAD(observations,
     # threshold = np.min(sorted_power[lorenz_function < quantile_fraction])
     threshold = sorted_power[lorenz_function < quantile_fraction][-1]
     threshold += min_power
-    vad = power > threshold
+    # vad = power > threshold
+    vad = power > np.max(power) - 28 * 513
     vad = 0.5 + quantile_weight * (vad - 0.5)
     vad = np.round(vad) # to have either 0 or 1 values
     if vad.dtype != 'float32':
@@ -110,6 +113,153 @@ def noise_robust_clean_speech_IBM(observations,
                                                quantile_fraction_end=vad_quantile_fraction_end,
                                                quantile_weight=quantile_weight,
                                                eps=eps)
-    ibm_labels = clean_speech_IBM(observations, quantile_fraction=ibm_quantile_fraction, quantile_weight=quantile_weight, eps=eps)
+    ibm_labels, sorted_power = clean_speech_IBM(observations, quantile_fraction=ibm_quantile_fraction, quantile_weight=quantile_weight, eps=eps)
     ibm_labels = ibm_labels * vad_labels
-    return ibm_labels
+    return ibm_labels, sorted_power
+
+########################
+#### Threshold-based IBM
+########################
+
+def _voiced_unvoiced_split_characteristic(number_of_frequency_bins):
+    split_bin = 200
+    transition_width = 99
+    fast_transition_width = 5
+    low_bin = 4
+    high_bin = 500
+
+    a = np.arange(0, transition_width)
+    a = np.pi / (transition_width - 1) * a
+    transition = 0.5 * (1 + np.cos(a))
+
+    b = np.arange(0, fast_transition_width)
+    b = np.pi / (fast_transition_width - 1) * b
+    fast_transition = (np.cos(b) + 1) / 2
+
+    transition_voiced_start = int(split_bin - transition_width / 2)
+    voiced = np.ones(number_of_frequency_bins)
+
+    # High Edge
+    voiced[transition_voiced_start - 1: (
+        transition_voiced_start + transition_width - 1)] = transition
+    voiced[transition_voiced_start - 1 + transition_width: len(voiced)] = 0
+
+    # Low Edge
+    voiced[0: low_bin] = 0
+    voiced[low_bin - 1: (low_bin + fast_transition_width - 1)] = \
+        1 - fast_transition
+
+    # Low Edge
+    unvoiced = np.ones(number_of_frequency_bins)
+    unvoiced[transition_voiced_start - 1: (
+        transition_voiced_start + transition_width - 1)] = 1 - transition
+    unvoiced[0: (transition_voiced_start)] = 0
+
+    # High Edge
+    unvoiced[high_bin - 1: (len(unvoiced))] = 0
+    unvoiced[
+    high_bin - 1: (high_bin + fast_transition_width - 1)] = fast_transition
+
+    return (voiced, unvoiced)
+
+def noise_aware_IBM(X, N,
+                 threshold_unvoiced_speech=5,
+                 threshold_voiced_speech=0,
+                 threshold_unvoiced_noise=-10,
+                 threshold_voiced_noise=-10,
+                 low_cut=5,
+                 high_cut=500):
+    """Estimate an ideal binary mask given the speech and noise spectrum.
+    :param X: speech signal in STFT domain with shape (frames, frequency-bins)
+    :param N: noise signal in STFT domain with shape (frames, frequency-bins)
+    :param threshold_unvoiced_speech:
+    :param threshold_voiced_speech:
+    :param threshold_unvoiced_noise:
+    :param threshold_voiced_noise:
+    :param low_cut: all values with frequency<low_cut are set to 0 in the
+        speech mask ans set to 1 in the noise mask
+    :param high_cut: all values with frequency>high_cut are set to 0 in the
+        speech mask ans set to 1 in the noise mask
+    :return: (speech mask, noise mask): tuple containing the two arrays,
+        which are the masks for X and N
+    """
+    (voiced, unvoiced) = _voiced_unvoiced_split_characteristic(X.shape[-1])
+
+    # calculate the thresholds
+    threshold = threshold_voiced_speech * voiced + \
+                threshold_unvoiced_speech * unvoiced
+    threshold_new = threshold_unvoiced_noise * voiced + \
+                    threshold_voiced_noise * unvoiced
+
+    xPSD = X * X.conjugate()  # |X|^2 = Power-Spectral-Density
+
+    # each frequency is multiplied with another threshold
+    c = np.power(10, (threshold / 10))
+    xPSD_threshold = xPSD / c
+    c_new = np.power(10, (threshold_new / 10))
+    xPSD_threshold_new = xPSD / c_new
+
+    nPSD = N * N.conjugate()
+
+    speechMask = (xPSD_threshold > nPSD)
+
+    speechMask = np.logical_and(speechMask, (xPSD_threshold > 0.005))
+    speechMask[..., 0:low_cut - 1] = 0
+    speechMask[..., high_cut:len(speechMask[0])] = 0
+
+    noiseMask = (xPSD_threshold_new < nPSD)
+
+    noiseMask = np.logical_or(noiseMask, (xPSD_threshold_new < 0.005))
+    noiseMask[..., 0: low_cut - 1] = 1
+    noiseMask[..., high_cut: len(noiseMask[0])] = 1
+
+    return (speechMask, noiseMask)
+
+
+def threshold_IBM(X,
+                 threshold_unvoiced_speech=5,
+                 threshold_voiced_speech=0,
+                 threshold_unvoiced_noise=-10,
+                 threshold_voiced_noise=-10,
+                 low_cut=5,
+                 high_cut=500):
+    """Estimate an ideal binary mask given the speech and noise spectrum.
+    :param X: speech signal in STFT domain with shape (frames, frequency-bins)
+    :param N: noise signal in STFT domain with shape (frames, frequency-bins)
+    :param threshold_unvoiced_speech:
+    :param threshold_voiced_speech:
+    :param threshold_unvoiced_noise:
+    :param threshold_voiced_noise:
+    :param low_cut: all values with frequency<low_cut are set to 0 in the
+        speech mask ans set to 1 in the noise mask
+    :param high_cut: all values with frequency>high_cut are set to 0 in the
+        speech mask ans set to 1 in the noise mask
+    :return: (speech mask, noise mask): tuple containing the two arrays,
+        which are the masks for X and N
+    """
+    (voiced, unvoiced) = _voiced_unvoiced_split_characteristic(X.shape[-1])
+
+    # calculate the thresholds
+    threshold = threshold_voiced_speech * voiced + \
+                threshold_unvoiced_speech * unvoiced
+    threshold_new = threshold_unvoiced_noise * voiced + \
+                    threshold_voiced_noise * unvoiced
+
+    xPSD = X * X.conjugate()  # |X|^2 = Power-Spectral-Density
+
+    # each frequency is multiplied with another threshold
+    c = np.power(10, (threshold / 10))
+    xPSD_threshold = xPSD / c
+    c_new = np.power(10, (threshold_new / 10))
+    xPSD_threshold_new = xPSD / c_new
+
+    # nPSD = N * N.conjugate()
+    nPSD = 10
+
+    speechMask = (xPSD_threshold > nPSD)
+
+    speechMask = np.logical_and(speechMask, (xPSD_threshold > 0.005))
+    speechMask[..., 0:low_cut - 1] = 0
+    speechMask[..., high_cut:len(speechMask[0])] = 0
+
+    return speechMask

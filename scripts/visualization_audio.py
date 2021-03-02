@@ -14,15 +14,19 @@ import concurrent.futures # for multiprocessing
 import soundfile as sf
 
 from packages.processing.stft import stft, stft_pytorch
-from packages.processing.target import clean_speech_IBM, \
+from packages.processing.target import clean_speech_VAD, clean_speech_IBM, \
                     noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
 from packages.visualization import display_wav_spectro_mask
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+from librosa import util
+# sns.set_theme()
 
 # Dataset
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
-
 
 # Settings
 dataset_type = 'test'
@@ -33,8 +37,8 @@ dataset_size = 'subset'
 #dataset_size = 'complete'
 
 # Labels
-labels = 'ibm_labels'
-# labels = 'vad_labels'
+# labels = 'ibm_labels'
+labels = 'vad_labels'
 
 # System 
 
@@ -115,7 +119,7 @@ def process_audio(args):
                 pad_at_end=pad_at_end,
                 dtype=dtype) # shape = (freq_bins, frames)
 
-    # TF representation (PyTorch)
+    # TF representation (torchaudio.stft)
     s_tf_torch = stft_pytorch(s_t_torch,
             fs=fs,
             wlen_sec=wlen_sec,
@@ -125,6 +129,18 @@ def process_audio(args):
             pad_mode=pad_mode,
             pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
+    # TF representation (torchaudio.transform.Spectrogram)
+    # #TODO: Sometimes stft / istft shortens the ouput due to window size
+    # # so you need to pad the end with hopsamp zeros
+    # if pad_at_end:
+    #     utt_len = len(x) / fs
+    #     if math.ceil(utt_len / wlen_sec / hop_percent) != int(utt_len / wlen_sec / hop_percent):
+    #         x_ = torch.nn.functional.pad(x, (0,hopsamp), mode='constant')
+    #     else:
+    #         x_ = x
+    #TODO: implement own stft_transform to put center=False
+    # s_tf_torch_transform = stft_transform(s_t_torch)
+
     # compare TF representation
     s_tf_torch = s_tf_torch[...,0].numpy() + 1j * s_tf_torch[...,1].numpy()
 
@@ -133,26 +149,62 @@ def process_audio(args):
     if labels == 'vad_labels':
         # Compute vad
         # # s_vad = noise_robust_clean_speech_VAD(s_tf,
-        speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
-                                            quantile_fraction_begin=quantile_fraction_begin,
-                                            quantile_fraction_end=quantile_fraction_end,
-                                            quantile_weight=quantile_weight,
-                                            eps=eps)
+        # speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
+        #                                     quantile_fraction_begin=quantile_fraction_begin,
+        #                                     quantile_fraction_end=quantile_fraction_end,
+        #                                     quantile_weight=quantile_weight,
+        #                                     eps=eps)
+        # speech_vad = clean_speech_VAD(s_tf_torch,
+        #                         quantile_fraction=vad_quantile_fraction_begin,
+        #                         quantile_weight=quantile_weight,
+        #                         eps=eps)
+        nfft = int(wlen_sec * fs) # STFT window length in samples
+        hopsamp = int(hop_percent * nfft) # hop size in samples
+        # Sometimes stft / istft shortens the ouput due to window size
+        # so you need to pad the end with hopsamp zeros
+        if pad_at_end:
+            utt_len = len(s_t) / fs
+            if math.ceil(utt_len / wlen_sec / hop_percent) != int(utt_len / wlen_sec / hop_percent):
+                y = np.pad(s_t, (0,hopsamp), mode='constant')
+            else:
+                y = s_t.copy()
+        else:
+            y = s_t.copy()
+
+        if center:
+            y = np.pad(y, int(nfft // 2), mode=pad_mode)
+
+        y_frames = util.frame(y, frame_length=nfft, hop_length=hopsamp)
+        
+        # power = (10 * np.log10(np.power(y_frames,2).sum(axis=0)))
+        # speech_vad = power > np.min(power) + 11
+        # speech_vad = power > np.min(power) - np.min(power)*0.41
+        
+        power = np.power(y_frames,2).sum(axis=0)
+        speech_vad = power > np.power(10, 1.2) * np.min(power)
+        speech_vad = np.float32(speech_vad)
+        speech_vad = speech_vad[None]
+        
+        # speech_vad = np.zeros_like(y_frames)
+        # for i, frame in enumerate(y_frames.T):
+        #     if vad.is_speech(np.pad(frame, (0,64)).tobytes(), fs):
+        #         speech_vad[i] = 1.0
+
         label = speech_vad
 
     if labels == 'ibm_labels':
         # binary mask
         # # speech_ibm = noise_robust_clean_speech_IBM(s_tf,
-        speech_ibm = noise_robust_clean_speech_IBM(s_tf_torch,
-                                            vad_quantile_fraction_begin=vad_quantile_fraction_begin,
-                                            vad_quantile_fraction_end=vad_quantile_fraction_end,
-                                            ibm_quantile_fraction=ibm_quantile_fraction,
-                                            quantile_weight=ibm_quantile_weight,
-                                            eps=eps)   
-        # speech_ibm = clean_speech_IBM(s_tf_torch,
-        #                               quantile_fraction=ibm_quantile_fraction,
-        #                               quantile_weight=ibm_quantile_weight,
-        #                               eps=eps)   
+        # speech_ibm, sorted_power = noise_robust_clean_speech_IBM(s_tf_torch,
+        #                                     vad_quantile_fraction_begin=vad_quantile_fraction_begin,
+        #                                     vad_quantile_fraction_end=vad_quantile_fraction_end,
+        #                                     ibm_quantile_fraction=ibm_quantile_fraction,
+        #                                     quantile_weight=ibm_quantile_weight,
+        #                                     eps=eps)   
+        speech_ibm, sorted_power = clean_speech_IBM(s_tf_torch,
+                                      quantile_fraction=ibm_quantile_fraction,
+                                      quantile_weight=ibm_quantile_weight,
+                                      eps=eps)   
         label = speech_ibm
 
     #TODO: modify
@@ -163,26 +215,32 @@ def process_audio(args):
                         xticks_sec=xticks_sec, fontsize=fontsize)
     
     # # put all metrics in the title of the figure
-    # title = "Input SNR = {:.1f} dB \n" \
-    #     "F1-score = {:.3f} \n".format(all_snr_db[i], f1score_s_hat)
-
+    # title = "Cumulated power = {:,} dB \n" \
+    #     "".format(sorted_power.sum())
     # fig.suptitle(title, fontsize=40)
 
     # Save figure
     output_path = classif_data_dir + mat_file_path
     output_path = os.path.splitext(output_path)[0]
+    print(output_path)
 
     if not os.path.exists(os.path.dirname(output_path)):
         os.makedirs(os.path.dirname(output_path))
 
-    # fig.savefig(output_path + '_hard_mask.png')
-    # fig.savefig(output_path + '_hard_' + labels + '_upsampled.png')
-    # fig.savefig(output_path + '_hard_' + labels + '_torch.png')
-    # fig.savefig(output_path + '_hard_' + labels + '_noise-sensitive.png')
-    # fig.savefig(output_path + '_hard_' + labels + '_log.png')
-    fig.savefig(output_path + '_hard_' + labels + '_robust_log.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_torch_transform.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_threshold.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_threshold_50.png')
+    fig.savefig(output_path + '_hard_' + labels + '_threshold_11.png')
+
+    # # Plot histograms of energy
+    # plt.figure(figsize=(20,25))
+    # ax = sns.histplot(sorted_power, binwidth=10)
+    # ax.figure.savefig(output_path + '_hist.png')
 
 def main():
+
+    # global stft_transform
+    global vad
 
     # Create file list
     mat_file_paths = video_list(input_video_dir=input_video_dir,
@@ -190,7 +248,18 @@ def main():
     
     audio_file_paths, output_audio_file_paths = speech_list(input_speech_dir=input_video_dir,
                              dataset_type=dataset_type)
+    
+    # # STFT (torchaudio.transforms.Spectrogram)
+    # nfft = int(wlen_sec * fs) # STFT window length in samples
+    # hopsamp = int(hop_percent * nfft) # hop size in samples
 
+    # stft_transform = torchaudio.transforms.Spectrogram(n_fft=nfft,
+    #                                   win_length=None,
+    #                                   hop_length=hopsamp,
+    #                                   pad=nfft//2,
+    #                                   window_fn=torch.hann_window,
+    #                                   power=None)
+    
     t1 = time.perf_counter()
 
     args = [[mat_file_path, audio_file_path]
