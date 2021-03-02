@@ -37,8 +37,8 @@ dataset_type = 'test'
 dataset_size = 'complete'
 
 # Labels
-# labels = 'ibm_labels'
-labels = 'vad_labels'
+labels = 'ibm_labels'
+# labels = 'vad_labels'
 
 # System 
 
@@ -84,7 +84,9 @@ xticks_sec = 2.0 # in seconds
 fontsize = 30
 
 ## Classifier
-classif_name = 'oracle_classif'
+# classif_name = 'oracle_classif'
+# classif_name = 'oracle_classif_ibm'
+classif_name = 'oracle_classif_ibm_noise_robust'
 
 # Data directories
 input_video_dir = os.path.join('data',dataset_size,'raw/')
@@ -146,52 +148,53 @@ def process_audio(args):
 
     # np.testing.assert_allclose(s_tf_torch, s_tf)
 
-    if labels == 'vad_labels':
-        # Compute vad
-        # # s_vad = noise_robust_clean_speech_VAD(s_tf,
-        # speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
-        #                                     quantile_fraction_begin=quantile_fraction_begin,
-        #                                     quantile_fraction_end=quantile_fraction_end,
-        #                                     quantile_weight=quantile_weight,
-        #                                     eps=eps)
-        # speech_vad = clean_speech_VAD(s_tf_torch,
-        #                         quantile_fraction=vad_quantile_fraction_begin,
-        #                         quantile_weight=quantile_weight,
-        #                         eps=eps)
-        nfft = int(wlen_sec * fs) # STFT window length in samples
-        hopsamp = int(hop_percent * nfft) # hop size in samples
-        # Sometimes stft / istft shortens the ouput due to window size
-        # so you need to pad the end with hopsamp zeros
-        if pad_at_end:
-            utt_len = len(s_t) / fs
-            if math.ceil(utt_len / wlen_sec / hop_percent) != int(utt_len / wlen_sec / hop_percent):
-                y = np.pad(s_t, (0,hopsamp), mode='constant')
-            else:
-                y = s_t.copy()
+    # if labels == 'vad_labels':
+
+    # Compute vad
+    # # s_vad = noise_robust_clean_speech_VAD(s_tf,
+    # speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
+    #                                     quantile_fraction_begin=quantile_fraction_begin,
+    #                                     quantile_fraction_end=quantile_fraction_end,
+    #                                     quantile_weight=quantile_weight,
+    #                                     eps=eps)
+    # speech_vad = clean_speech_VAD(s_tf_torch,
+    #                         quantile_fraction=vad_quantile_fraction_begin,
+    #                         quantile_weight=quantile_weight,
+    #                         eps=eps)
+    nfft = int(wlen_sec * fs) # STFT window length in samples
+    hopsamp = int(hop_percent * nfft) # hop size in samples
+    # Sometimes stft / istft shortens the ouput due to window size
+    # so you need to pad the end with hopsamp zeros
+    if pad_at_end:
+        utt_len = len(s_t) / fs
+        if math.ceil(utt_len / wlen_sec / hop_percent) != int(utt_len / wlen_sec / hop_percent):
+            y = np.pad(s_t, (0,hopsamp), mode='constant')
         else:
             y = s_t.copy()
+    else:
+        y = s_t.copy()
 
-        if center:
-            y = np.pad(y, int(nfft // 2), mode=pad_mode)
+    if center:
+        y = np.pad(y, int(nfft // 2), mode=pad_mode)
 
-        y_frames = util.frame(y, frame_length=nfft, hop_length=hopsamp)
-        
-        # power = (10 * np.log10(np.power(y_frames,2).sum(axis=0)))
-        # speech_vad = power > np.min(power) + 11
-        # speech_vad = power > np.min(power) - np.min(power)*0.41
-        
-        power = np.power(y_frames,2).sum(axis=0)
-        # speech_vad = power > np.power(10, 1.20) * np.min(power)
-        speech_vad = power > np.power(10, 1.70) * np.min(power)
-        speech_vad = np.float32(speech_vad)
-        speech_vad = speech_vad[None]
-        
-        # speech_vad = np.zeros_like(y_frames)
-        # for i, frame in enumerate(y_frames.T):
-        #     if vad.is_speech(np.pad(frame, (0,64)).tobytes(), fs):
-        #         speech_vad[i] = 1.0
+    y_frames = util.frame(y, frame_length=nfft, hop_length=hopsamp)
+    
+    # power = (10 * np.log10(np.power(y_frames,2).sum(axis=0)))
+    # speech_vad = power > np.min(power) + 11
+    # speech_vad = power > np.min(power) - np.min(power)*0.41
+    
+    power = np.power(y_frames,2).sum(axis=0)
+    # speech_vad = power > np.power(10, 1.20) * np.min(power)
+    speech_vad = power > np.power(10, 1.70) * np.min(power)
+    speech_vad = np.float32(speech_vad)
+    speech_vad = speech_vad[None]
+    
+    # speech_vad = np.zeros_like(y_frames)
+    # for i, frame in enumerate(y_frames.T):
+    #     if vad.is_speech(np.pad(frame, (0,64)).tobytes(), fs):
+    #         speech_vad[i] = 1.0
 
-        label = speech_vad
+    label = speech_vad
 
     if labels == 'ibm_labels':
         # binary mask
@@ -206,7 +209,8 @@ def process_audio(args):
                                       quantile_fraction=ibm_quantile_fraction,
                                       quantile_weight=ibm_quantile_weight,
                                       eps=eps)   
-        label = speech_ibm
+        # label = speech_ibm
+        label = speech_ibm * label
 
     #TODO: modify
     # fig = display_wav_spectro_mask(x=s_t, x_tf=s_tf, x_ibm=label,
