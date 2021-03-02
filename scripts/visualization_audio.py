@@ -33,8 +33,8 @@ dataset_type = 'test'
 # dataset_type = 'validation'
 # dataset_type = 'train'
 
-dataset_size = 'subset'
-#dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 
 # Labels
 # labels = 'ibm_labels'
@@ -181,7 +181,8 @@ def process_audio(args):
         # speech_vad = power > np.min(power) - np.min(power)*0.41
         
         power = np.power(y_frames,2).sum(axis=0)
-        speech_vad = power > np.power(10, 1.2) * np.min(power)
+        # speech_vad = power > np.power(10, 1.20) * np.min(power)
+        speech_vad = power > np.power(10, 1.70) * np.min(power)
         speech_vad = np.float32(speech_vad)
         speech_vad = speech_vad[None]
         
@@ -224,18 +225,20 @@ def process_audio(args):
     output_path = os.path.splitext(output_path)[0]
     print(output_path)
 
-    if not os.path.exists(os.path.dirname(output_path)):
-        os.makedirs(os.path.dirname(output_path))
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     # fig.savefig(output_path + '_hard_' + labels + '_torch_transform.png')
-    # fig.savefig(output_path + '_hard_' + labels + '_threshold.png')
+    fig.savefig(output_path + '_hard_' + labels + '_threshold.png')
     # fig.savefig(output_path + '_hard_' + labels + '_threshold_50.png')
-    fig.savefig(output_path + '_hard_' + labels + '_threshold_11.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_threshold_11.png')
 
     # # Plot histograms of energy
     # plt.figure(figsize=(20,25))
     # ax = sns.histplot(sorted_power, binwidth=10)
     # ax.figure.savefig(output_path + '_hist.png')
+
+    # Close figure
+    plt.close()
 
 def main():
 
@@ -265,11 +268,11 @@ def main():
     args = [[mat_file_path, audio_file_path]
                     for mat_file_path, audio_file_path in zip(mat_file_paths, audio_file_paths)]
 
-    # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-    #     executor.map(process_audio, args)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+        executor.map(process_audio, args)
 
-    for i, args in enumerate(zip(mat_file_paths, audio_file_paths)):
-        process_audio(args)
+    # for i, args in enumerate(zip(mat_file_paths, audio_file_paths)):
+    #     process_audio(args)
     
     t2 = time.perf_counter()
     print(f'Finished in {t2 - t1} seconds')
