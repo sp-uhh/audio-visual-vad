@@ -102,6 +102,7 @@ def istft(Sxx,
 def stft_pytorch(x,
          fs=16e3,
          wlen_sec=50e-3,
+        #  win='hann',
          win='hann',
          hop_percent=0.25,
          center=True,
@@ -137,8 +138,9 @@ def stft_pytorch(x,
         else:
             x_ = x
     
-    if win == 'hann':
-        window = torch.hann_window(window_length=nfft)
+    # if win == 'hann':
+    #     window = torch.hann_window(window_length=nfft).to(x_.get_device())
+    window = win
 
     Sxx = torch.stft(input=x_,
                      n_fft=nfft,

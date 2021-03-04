@@ -18,8 +18,8 @@ from shutil import copyfile
 
 from packages.processing.stft import stft_pytorch
 from packages.processing.video import preprocess_ntcd_matlab
-from packages.processing.target import clean_speech_IBM,\
-                            noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
+from packages.processing.target import clean_speech_VAD, clean_speech_IBM,\
+                                noise_robust_clean_speech_IBM # because clean audio is very noisy
 
 # Parameters
 dataset_name = 'ntcd_timit'
@@ -32,7 +32,6 @@ dataset_types = ['train', 'validation']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
-output_data_folder = 'export'
 
 # Labels
 # labels = 'vad_labels'
@@ -49,17 +48,13 @@ pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 dtype = 'complex64'
 
+## Noise robust VAD
+vad_threshold = 1.70
+
 ## Noise robust IBM
-# vad_quantile_fraction_begin = 0.93
-# vad_quantile_fraction_end = 0.999
-# ibm_quantile_fraction = 0.999
-# ibm_quantile_weight = 0.999
 eps = 1e-8
-vad_quantile_fraction_begin = 0.5
-vad_quantile_fraction_end = 0.55
-vad_quantile_weight = 1.0
-ibm_quantile_fraction = 0.25
-ibm_quantile_weight = 1.0
+ibm_threshold = 50 # Hard threshold
+# ibm_threshold = 65 # Soft threshold
 
 # HDF5 parameters
 rdcc_nbytes = 1024**2*40 # The number of bytes to use for the chunk cache
@@ -121,26 +116,34 @@ def process_write_label(args):
         
     if labels == 'vad_labels':
         # Compute vad
-        speech_vad = noise_robust_clean_speech_VAD(speech_tf,
-                                            quantile_fraction_begin=vad_quantile_fraction_begin,
-                                            quantile_fraction_end=vad_quantile_fraction_end,
-                                            quantile_weight=vad_quantile_weight,
-                                            eps=eps)
+        speech_vad = clean_speech_VAD(speech_tf,
+                                      fs=fs,
+                                      wlen_sec=wlen_sec,
+                                      hop_percent=hop_percent,
+                                      center=center,
+                                      pad_mode=pad_mode,
+                                      pad_at_end=pad_at_end,
+                                      vad_threshold=vad_threshold)
 
         label = speech_vad
 
     if labels == 'ibm_labels':
         # binary mask
-        speech_ibm = noise_robust_clean_speech_IBM(speech_tf,
-                                            vad_quantile_fraction_begin=vad_quantile_fraction_begin,
-                                            vad_quantile_fraction_end=vad_quantile_fraction_end,
-                                            ibm_quantile_fraction=ibm_quantile_fraction,
-                                            quantile_weight=ibm_quantile_weight,
-                                            eps=eps)
-        # speech_ibm = clean_speech_IBM(speech_tf,
-        #                               quantile_fraction=ibm_quantile_fraction,
-        #                               quantile_weight=ibm_quantile_weight,
-        #                               eps=eps)
+        speech_ibm = clean_speech_IBM(speech_tf,
+                                      eps=eps,
+                                      ibm_threshold=ibm_threshold)
+
+        # speech_ibm = noise_robust_clean_speech_IBM(s_t_torch.numpy(),
+        #                                            s_tf_torch,
+        #                                            fs=fs,
+        #                                            wlen_sec=wlen_sec,
+        #                                            hop_percent=hop_percent,
+        #                                            center=center,
+        #                                            pad_mode=pad_mode,
+        #                                            pad_at_end=pad_at_end,
+        #                                            vad_threshold=vad_threshold,
+        #                                            eps=eps,
+        #                                            ibm_threshold=ibm_threshold)
 
         label = speech_ibm
 
@@ -239,7 +242,7 @@ def process_write_noisy_audio(args):
     noisy_spectrogram = noisy_speech_tf[...,0]**2 + noisy_speech_tf[...,1]**2
 
     # Apply log
-    spectrogram = np.log(noisy_spectrogram + eps)
+    noisy_spectrogram = np.log(noisy_spectrogram + eps)
     
     # Read preprocessed video corresponding to clean audio
     mat_file_path = clean_file_path.replace('Clean', 'matlab_raw')
@@ -284,12 +287,12 @@ def main():
 
         t1 = time.perf_counter()
 
-        # # Process targets
+        # Process targets
         # for i, arg in tqdm(enumerate(args)):
         #     process_write_label(arg)
 
-        # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-        #     train_stats = executor.map(process_write_label, args)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+            train_stats = executor.map(process_write_label, args)
 
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')
