@@ -15,12 +15,11 @@ import soundfile as sf
 
 from packages.processing.stft import stft, stft_pytorch
 from packages.processing.target import clean_speech_VAD, clean_speech_IBM, \
-                    noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
+                                    noise_robust_clean_speech_IBM # because clean audio is very noisy
 from packages.visualization import display_wav_spectro_mask
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-from librosa import util
 # sns.set_theme()
 
 # Dataset
@@ -29,19 +28,16 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list
 
 # Settings
-dataset_type = 'test'
+# dataset_type = 'test'
 # dataset_type = 'validation'
-# dataset_type = 'train'
+dataset_type = 'train'
 
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 
 # Labels
 labels = 'ibm_labels'
 # labels = 'vad_labels'
-
-# System 
-
 
 # Parameters
 ## STFT
@@ -58,24 +54,12 @@ pad_at_end = True  # pad audio file at end to match same size after stft + istft
 dtype = 'complex64' # STFT data type
 
 ## Noise robust VAD
-eps = 1e-8
-# quantile_fraction_end = 0.999
-# quantile_weight = 0.999
-# quantile_fraction_begin = 0.93
-quantile_fraction_begin = 0.5
-quantile_fraction_end = 0.55
-quantile_weight = 1.0
+vad_threshold = 1.70
 
 ## Noise robust IBM
 eps = 1e-8
-# vad_quantile_fraction_end = 0.999
-# ibm_quantile_fraction = 0.999
-# ibm_quantile_weight = 0.999
-# vad_quantile_fraction_begin = 0.93
-vad_quantile_fraction_begin = 0.5
-vad_quantile_fraction_end = 0.55
-ibm_quantile_fraction = 0.25
-ibm_quantile_weight = 1.0
+ibm_threshold = 50 # Hard threshold
+# ibm_threshold = 65 # Soft threshold
 
 ## Plot spectrograms
 vmin = -40 # in dB
@@ -85,8 +69,8 @@ fontsize = 30
 
 ## Classifier
 # classif_name = 'oracle_classif'
-# classif_name = 'oracle_classif_ibm'
-classif_name = 'oracle_classif_ibm_noise_robust'
+classif_name = 'oracle_classif_ibm'
+# classif_name = 'oracle_classif_ibm_noise_robust'
 
 # Data directories
 input_video_dir = os.path.join('data',dataset_size,'raw/')
@@ -148,72 +132,40 @@ def process_audio(args):
 
     # np.testing.assert_allclose(s_tf_torch, s_tf)
 
-    # if labels == 'vad_labels':
+    if labels == 'vad_labels':
 
-    # Compute vad
-    # # s_vad = noise_robust_clean_speech_VAD(s_tf,
-    # speech_vad = noise_robust_clean_speech_VAD(s_tf_torch,
-    #                                     quantile_fraction_begin=quantile_fraction_begin,
-    #                                     quantile_fraction_end=quantile_fraction_end,
-    #                                     quantile_weight=quantile_weight,
-    #                                     eps=eps)
-    # speech_vad = clean_speech_VAD(s_tf_torch,
-    #                         quantile_fraction=vad_quantile_fraction_begin,
-    #                         quantile_weight=quantile_weight,
-    #                         eps=eps)
-    nfft = int(wlen_sec * fs) # STFT window length in samples
-    hopsamp = int(hop_percent * nfft) # hop size in samples
-    # Sometimes stft / istft shortens the ouput due to window size
-    # so you need to pad the end with hopsamp zeros
-    if pad_at_end:
-        utt_len = len(s_t) / fs
-        if math.ceil(utt_len / wlen_sec / hop_percent) != int(utt_len / wlen_sec / hop_percent):
-            y = np.pad(s_t, (0,hopsamp), mode='constant')
-        else:
-            y = s_t.copy()
-    else:
-        y = s_t.copy()
-
-    if center:
-        y = np.pad(y, int(nfft // 2), mode=pad_mode)
-
-    y_frames = util.frame(y, frame_length=nfft, hop_length=hopsamp)
-    
-    # power = (10 * np.log10(np.power(y_frames,2).sum(axis=0)))
-    # speech_vad = power > np.min(power) + 11
-    # speech_vad = power > np.min(power) - np.min(power)*0.41
-    
-    power = np.power(y_frames,2).sum(axis=0)
-    # speech_vad = power > np.power(10, 1.20) * np.min(power)
-    speech_vad = power > np.power(10, 1.70) * np.min(power)
-    speech_vad = np.float32(speech_vad)
-    speech_vad = speech_vad[None]
-    
-    # speech_vad = np.zeros_like(y_frames)
-    # for i, frame in enumerate(y_frames.T):
-    #     if vad.is_speech(np.pad(frame, (0,64)).tobytes(), fs):
-    #         speech_vad[i] = 1.0
-
-    label = speech_vad
+        # Compute vad
+        speech_vad = clean_speech_VAD(s_t_torch.numpy(),
+                                      fs=fs,
+                                      wlen_sec=wlen_sec,
+                                      hop_percent=hop_percent,
+                                      center=center,
+                                      pad_mode=pad_mode,
+                                      pad_at_end=pad_at_end,
+                                      vad_threshold=vad_threshold)
+        
+        label = speech_vad
 
     if labels == 'ibm_labels':
         # binary mask
-        # # speech_ibm = noise_robust_clean_speech_IBM(s_tf,
-        # speech_ibm, sorted_power = noise_robust_clean_speech_IBM(s_tf_torch,
-        #                                     vad_quantile_fraction_begin=vad_quantile_fraction_begin,
-        #                                     vad_quantile_fraction_end=vad_quantile_fraction_end,
-        #                                     ibm_quantile_fraction=ibm_quantile_fraction,
-        #                                     quantile_weight=ibm_quantile_weight,
-        #                                     eps=eps)   
-        speech_ibm, sorted_power = clean_speech_IBM(s_tf_torch,
-                                      quantile_fraction=ibm_quantile_fraction,
-                                      quantile_weight=ibm_quantile_weight,
-                                      eps=eps)   
-        # label = speech_ibm
-        label = speech_ibm * label
+        # speech_ibm = clean_speech_IBM(s_tf_torch,
+        #                               eps=eps,
+        #                               ibm_threshold=ibm_threshold)
 
-    #TODO: modify
-    # fig = display_wav_spectro_mask(x=s_t, x_tf=s_tf, x_ibm=label,
+        speech_ibm = noise_robust_clean_speech_IBM(s_t_torch.numpy(),
+                                                   s_tf_torch,
+                                                   fs=fs,
+                                                   wlen_sec=wlen_sec,
+                                                   hop_percent=hop_percent,
+                                                   center=center,
+                                                   pad_mode=pad_mode,
+                                                   pad_at_end=pad_at_end,
+                                                   vad_threshold=vad_threshold,
+                                                   eps=eps,
+                                                   ibm_threshold=ibm_threshold)
+        label = speech_ibm
+
+    # Plot figure
     fig = display_wav_spectro_mask(x=s_t, x_tf=s_tf_torch, x_ibm=label,
                         fs=fs, vmin=vmin, vmax=vmax,
                         wlen_sec=wlen_sec, hop_percent=hop_percent,
@@ -236,6 +188,7 @@ def process_audio(args):
     # fig.savefig(output_path + '_hard_' + labels + '_threshold_50.png')
     # fig.savefig(output_path + '_hard_' + labels + '_threshold_11.png')
 
+    #TODO: put in visualization.py
     # # Plot histograms of energy
     # plt.figure(figsize=(20,25))
     # ax = sns.histplot(sorted_power, binwidth=10)
@@ -272,11 +225,11 @@ def main():
     args = [[mat_file_path, audio_file_path]
                     for mat_file_path, audio_file_path in zip(mat_file_paths, audio_file_paths)]
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-        executor.map(process_audio, args)
+    # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+    #     executor.map(process_audio, args)
 
-    # for i, args in enumerate(zip(mat_file_paths, audio_file_paths)):
-    #     process_audio(args)
+    for i, args in enumerate(zip(mat_file_paths, audio_file_paths)):
+        process_audio(args)
     
     t2 = time.perf_counter()
     print(f'Finished in {t2 - t1} seconds')

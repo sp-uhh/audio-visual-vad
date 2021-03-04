@@ -10,10 +10,6 @@ import math
 TF representation
 """
 
-
-#TODO: write the spectrogram transform in pytorch (torchaudio)
-
-
 def stft(x,
          fs=16e3,
          wlen_sec=50e-3,
