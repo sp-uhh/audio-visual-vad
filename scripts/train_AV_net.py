@@ -60,7 +60,7 @@ if labels == 'ibm_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
-use_mcb=True
+use_mcb=False
 batch_norm=False
 std_norm =True
 eps = 1e-8
@@ -79,7 +79,8 @@ if labels == 'vad_labels':
     model_name = 'AV_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
-    model_name = 'AV_Classifier_mcb_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_mcb_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_batchnorm_resnet_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'dummy_AV_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories

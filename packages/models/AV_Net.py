@@ -29,6 +29,8 @@ class DeepVAD_AV(nn.Module):
             *list(resnet.children())[:-1]# drop the last FC layer
         )
 
+        self.bn = torch.nn.BatchNorm1d(self.num_video_ftrs, eps=self.eps, momentum=0.1, affine=True)
+        
         #audio related init
 
         self.num_audio_ftrs = 513
@@ -41,7 +43,8 @@ class DeepVAD_AV(nn.Module):
             self.lstm_input_size = self.mcb_output_size
             # self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size).cuda()
             self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size)
-            self.mcb_bn = torch.nn.BatchNorm1d(self.mcb_output_size, eps=1e-05, momentum=0.1, affine=True)
+            # self.mcb_bn = torch.nn.BatchNorm1d(self.mcb_output_size, eps=1e-05, momentum=0.1, affine=True)
+            self.mcb_bn = torch.nn.BatchNorm1d(self.mcb_output_size, eps=self.eps, momentum=0.1, affine=True)
         else:
             self.lstm_input_size = self.num_audio_ftrs + self.num_video_ftrs
 
@@ -84,6 +87,11 @@ class DeepVAD_AV(nn.Module):
         
         # Reshape to (batch , seq_len, Features)
         video = video.view(batch , frames, -1)
+        
+        # Batch norm before concatenating
+        video = video.permute(1, 2, 0).contiguous()
+        video = self.bn(video)
+        video = video.permute(2, 0, 1).contiguous()
         
         # Audio branch
         # audio = self.wavenet_en(audio) # output shape - Batch X Features X seq len
