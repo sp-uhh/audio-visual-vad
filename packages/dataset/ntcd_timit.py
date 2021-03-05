@@ -366,7 +366,7 @@ def proc_noisy_clean_pair_dict(input_speech_dir,
         clean_file_dir += 'test/'
 
     # List of files
-    clean_file_paths = sorted(glob(clean_file_dir + '**/*.h5',recursive=True))
+    clean_file_paths = sorted(glob(clean_file_dir + '**/*' + '_' + labels + '.h5',recursive=True))
 
     # Get shortpaths
     file_shortpaths = []

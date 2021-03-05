@@ -26,8 +26,8 @@ if dataset_name == 'ntcd_timit':
 ## Dataset
 # dataset_types = ['train']
 # dataset_types = ['validation']
-# dataset_types = ['train', 'validation']
-dataset_types = ['test']
+dataset_types = ['train', 'validation']
+# dataset_types = ['test']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'

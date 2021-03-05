@@ -16,9 +16,6 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, speech_list,\
         proc_noisy_clean_pair_dict, proc_video_audio_pair_dict
 
-base_path = "data/complete/matlab_raw/"
-
-
 class VideoFrames(Dataset):
     def __init__(self, data, seq_length):
         self.data = data

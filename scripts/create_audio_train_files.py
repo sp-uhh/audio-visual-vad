@@ -28,15 +28,15 @@ if dataset_name == 'ntcd_timit':
 
 # Parameters
 ## Dataset
-# dataset_types = ['train', 'validation']
-dataset_types = ['test']
+dataset_types = ['train', 'validation']
+# dataset_types = ['test']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
 
 # Labels
-# labels = 'vad_labels'
-labels = 'ibm_labels'
+labels = 'vad_labels'
+# labels = 'ibm_labels'
 
 ## STFT
 fs = int(16e3) # Sampling rate
@@ -120,7 +120,7 @@ def process_write_label(args):
         
     if labels == 'vad_labels':
         # Compute vad
-        speech_vad = clean_speech_VAD(speech_tf,
+        speech_vad = clean_speech_VAD(speech.numpy(),
                                       fs=fs,
                                       wlen_sec=wlen_sec,
                                       hop_percent=hop_percent,
@@ -154,7 +154,7 @@ def process_write_label(args):
 
     # Read preprocessed video
     h5_file_path = output_video_dir + mat_file_path
-    h5_file_path = os.path.splitext(h5_file_path)[0] + '_' + labels + '_upsampled.h5'
+    h5_file_path = os.path.splitext(h5_file_path)[0] + '_upsampled.h5'
     with h5.File(h5_file_path, 'r') as file:
         video = np.array(file["X"][:])
 
@@ -291,7 +291,7 @@ def main():
 
         t1 = time.perf_counter()
 
-        # Process targets
+        # # Process targets
         # for i, arg in tqdm(enumerate(args)):
         #     process_write_label(arg)
 
@@ -327,40 +327,40 @@ def main():
             #     channels_sum += c_s
             #     channels_squared_sum += c_s_s
 
-            # Save data on SSD....
-            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-                train_stats = executor.map(process_write_noisy_audio, args)
+            # # Save data on SSD....
+            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+            #     train_stats = executor.map(process_write_noisy_audio, args)
             
-            for (n_s, c_s, c_s_s) in train_stats:
-                n_samples += n_s
-                channels_sum += c_s
-                channels_squared_sum += c_s_s 
+            # for (n_s, c_s, c_s_s) in train_stats:
+            #     n_samples += n_s
+            #     channels_sum += c_s
+            #     channels_squared_sum += c_s_s 
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')
 
-            print('Compute mean and std')
-            #NB: compute the empirical std (!= regular std)
-            mean = channels_sum / n_samples
-            std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
+            # print('Compute mean and std')
+            # #NB: compute the empirical std (!= regular std)
+            # mean = channels_sum / n_samples
+            # std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
 
-            # Save statistics
-            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-            os.makedirs(os.path.dirname(output_dataset_file), exist_ok=True)
+            # # Save statistics
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+            # # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+            # os.makedirs(os.path.dirname(output_dataset_file), exist_ok=True)
 
-            with h5.File(output_dataset_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:
-                # Delete datasets if already exists
-                if 'X_' + dataset_type + '_mean' in f:
-                    del f['X_' + dataset_type + '_mean']
-                    del f['X_' + dataset_type + '_std']
+            # with h5.File(output_dataset_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:
+            #     # Delete datasets if already exists
+            #     if 'X_' + dataset_type + '_mean' in f:
+            #         del f['X_' + dataset_type + '_mean']
+            #         del f['X_' + dataset_type + '_std']
 
-                f.create_dataset('X_' + dataset_type + '_mean', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
-                f.create_dataset('X_' + dataset_type + '_std', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+            #     f.create_dataset('X_' + dataset_type + '_mean', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+            #     f.create_dataset('X_' + dataset_type + '_std', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
                 
-                f['X_' + dataset_type + '_mean'][:] = mean[..., None] # Add axis to fit chunks shape
-                f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
-                print('Mean and std saved in HDF5.')
+            #     f['X_' + dataset_type + '_mean'][:] = mean[..., None] # Add axis to fit chunks shape
+            #     f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
+            #     print('Mean and std saved in HDF5.')
         
         if dataset_type in ['validation', 'test']:
 
@@ -369,8 +369,8 @@ def main():
             # for i, arg in tqdm(enumerate(args)):
             #     process_write_noisy_audio(arg)
 
-            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-                executor.map(process_write_noisy_audio, args)
+            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+            #     executor.map(process_write_noisy_audio, args)
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')

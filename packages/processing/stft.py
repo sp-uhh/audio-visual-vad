@@ -138,9 +138,9 @@ def stft_pytorch(x,
         else:
             x_ = x
     
-    # if win == 'hann':
-    #     window = torch.hann_window(window_length=nfft).to(x_.get_device())
-    window = win
+    if win == 'hann':
+        window = torch.hann_window(window_length=nfft)
+    # window = win
 
     Sxx = torch.stft(input=x_,
                      n_fft=nfft,
