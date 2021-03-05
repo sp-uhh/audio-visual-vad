@@ -20,8 +20,8 @@ from packages.utils import count_parameters, collate_many2many_audio, collate_ma
 from packages.processing.stft import stft_pytorch
 
 # Dataset
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
 

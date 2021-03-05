@@ -474,3 +474,74 @@ class AudioVisualSequenceLabeledFrames(Dataset):
 
     def __len__(self):
         return self.dataset_len
+
+class AudioVisualSequenceWavLabeledFrames(Dataset):
+    def __init__(self,
+                 input_video_dir, dataset_type,
+                 dataset_size, labels='vad_labels',
+                 fs=16000, wlen_sec=64e-3, win='hann', hop_percent=0.25,
+                 center=True, pad_mode='reflect', pad_at_end=True, eps=1e-8):
+        # Do not load hdf5 in __init__ if num_workers > 0
+        self.input_video_dir = input_video_dir
+        self.dataset_type = dataset_type
+        self.dataset_size = dataset_size        
+        self.labels = labels
+
+        # STFT parameters
+        self.fs = fs
+        self.wlen_sec = wlen_sec
+        self.win = win
+        self.hop_percent = hop_percent
+        self.center = center
+        self.pad_mode = pad_mode
+        self.pad_at_end = pad_at_end
+        self.eps = eps
+
+        # Dict mapping noisy speech to clean speech
+        self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
+                                                                 dataset_type=dataset_type,
+                                                                 dataset_size=dataset_size,
+                                                                 labels=labels)
+
+        # Convert dict to tuples
+        self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
+
+        self.dataset_len = len(self.noisy_clean_pair_paths) # total number of utterances
+
+    def __getitem__(self, i):
+        # select utterance
+        (proc_noisy_file_path, clean_file_path) = self.noisy_clean_pair_paths[i]
+        
+        # Read noisy audio
+        noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + proc_noisy_file_path)
+        # noisy_speech, fs_noisy_speech = torchaudio.load(self.input_video_dir + clean_file_path)
+        noisy_speech = noisy_speech[0] # 1channel
+
+        # Normalize audio
+        data = noisy_speech / (torch.max(torch.abs(noisy_speech)))
+       
+        # Read video
+        output_h5_file = clean_file_path.replace('Clean', 'matlab_raw')
+        output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+        output_h5_file = self.input_video_dir + output_h5_file
+
+        # Open HDF5 file
+        with h5.File(output_h5_file, 'r') as file:
+            video = np.array(file["X"][:])
+            video = torch.Tensor(video)
+
+        # Read label
+        output_h5_file = self.input_video_dir + clean_file_path
+
+        with h5.File(output_h5_file, 'r') as file:
+            label = np.array(file["Y"][:])
+            label = torch.Tensor(label)
+
+        # Reduce frames of audio, video or label
+        time_length = data.shape[-1]
+        tf_length = video.shape[-1]
+                
+        return data, video, label, time_length, tf_length
+
+    def __len__(self):
+        return self.dataset_len

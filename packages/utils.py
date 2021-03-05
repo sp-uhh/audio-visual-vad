@@ -184,23 +184,26 @@ def collate_many2many_AV(batch):
     
     return lengths, padded_audio, padded_video, target
 
-def collate_many2many_AV_v2(batch):
+def collate_many2many_AV_waveform(batch):
     # Get dimensions
     lengths = [i[-1] for i in batch]   # get the length of each sequence in the batch
+    time_lengths = [i[-2] for i in batch]   # get the length of each sequence in the batch
     batch_size = len(batch)
     seq_length = max(lengths)
-    x_dim, _ = batch[0][0].size()
+    seq_time_length = max(time_lengths) 
     height, width, _ = batch[0][1].size()
     y_dim, _ = batch[0][2].size()
 
-    padded_audio = torch.zeros((batch_size, x_dim, seq_length))
+    padded_audio = torch.zeros((batch_size, seq_time_length))
     padded_video = torch.zeros((batch_size, height, width, seq_length))    
     target = torch.zeros((batch_size, y_dim, seq_length))
 
-    for idx, (sample, length) in enumerate(zip(batch, lengths)):
+    for idx, (sample, length, time_length) in enumerate(zip(batch, lengths, time_lengths)):
         # Padd sequence at beginning
-        npad = (0, seq_length-length)
+        npad = (0, seq_time_length-time_length)
         padded_audio[idx] = pad(sample[0], npad, mode='constant', value=0.) # pad last dimension
+        
+        npad = (0, seq_length-length)
         padded_video[idx] = pad(sample[1], npad, mode='constant', value=0.) # pad last dimension
         target[idx] = pad(sample[2], npad, mode='constant', value=0.)
 

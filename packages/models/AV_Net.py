@@ -36,7 +36,8 @@ class DeepVAD_AV(nn.Module):
         # general init
 
         if self.use_mcb:
-            self.mcb_output_size = 1024
+            # self.mcb_output_size = 1024
+            self.mcb_output_size = 512
             self.lstm_input_size = self.mcb_output_size
             # self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size).cuda()
             self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size)
@@ -114,6 +115,7 @@ class DeepVAD_AV(nn.Module):
 
         # y = self.dropout(y)
         # out, h = self.lstm_merged(y, h)  # output shape - seq len X Batch X lstm size
+        self.lstm_merged.flatten_parameters() # Avoid warning: RNN module weights are not part of single contiguous chunk of memory
         out, _ = self.lstm_merged(y)  # output shape - seq len X Batch X lstm size
         # out = self.dropout(out[-1]) # select last time step. many -> one
         

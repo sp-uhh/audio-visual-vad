@@ -11,10 +11,10 @@ import h5py as h5
 
 from torch.utils.data import DataLoader
 
-from packages.data_handling import AudioVisualSequenceLabeledFrames
+from packages.data_handling import AudioVisualSequenceLabeledFrames, AudioVisualSequenceWavLabeledFrames
 from packages.models.AV_Net import DeepVAD_AV
 from packages.models.utils import binary_cross_entropy, f1_loss
-from packages.utils import count_parameters, collate_many2many_AV
+from packages.utils import count_parameters, collate_many2many_AV, collate_many2many_AV_waveform
 from packages.processing.stft import stft_pytorch
 
 # Dataset
@@ -67,6 +67,7 @@ eps = 1e-8
 
 # Training
 batch_size = 32
+# batch_size = 2
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -78,7 +79,8 @@ if labels == 'vad_labels':
     model_name = 'AV_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
-    model_name = 'AV_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_mcb_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'dummy_AV_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
@@ -88,21 +90,38 @@ video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', datase
 #####################################################################################################
 
 print('Load data')
-train_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
+# train_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
+#                                                               dataset_size=dataset_size, labels=labels,
+#                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
+#                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
+# valid_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
+#                                                               dataset_size=dataset_size, labels=labels,
+#                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
+#                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
+
+# train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
+#                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+#                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
+# valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
+#                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
+#                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
+
+train_dataset = AudioVisualSequenceWavLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
                                                               dataset_size=dataset_size, labels=labels,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
-valid_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
+valid_dataset = AudioVisualSequenceWavLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
                                                               dataset_size=dataset_size, labels=labels,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV_waveform)
 valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV_waveform)
+
 
 print('- Number of training samples: {}'.format(len(train_dataset)))
 print('- Number of validation samples: {}'.format(len(valid_dataset)))
@@ -117,8 +136,12 @@ def main():
     if cuda: model = model.to(device)
 
     model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    # model = nn.parallel.DataParallel(model, device_ids=[4,5,6,7])
 
     if cuda: model = model.to(device)
+
+    nfft = int(wlen_sec * fs) # STFT window length in samples
+    window = torch.hann_window(window_length=nfft).to(device)
 
     # Create model folder
     model_dir = os.path.join('models', model_name)
@@ -176,21 +199,27 @@ def main():
                                         y.long().to(device, non_blocking=non_blocking),\
                                             lengths.to(device, non_blocking=non_blocking)
 
-            # # TF representation (PyTorch)
-            # x = stft_pytorch(x,
-            #         fs=fs,
-            #         wlen_sec=wlen_sec,
-            #         win=win, 
-            #         hop_percent=hop_percent,
-            #         center=center,
-            #         pad_mode=pad_mode,
-            #         pad_at_end=pad_at_end) # shape = (freq_bins, frames)
+            # TF representation (PyTorch)
+            x = stft_pytorch(x,
+                    fs=fs,
+                    wlen_sec=wlen_sec,
+                    win=window, 
+                    hop_percent=hop_percent,
+                    center=center,
+                    pad_mode=pad_mode,
+                    pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-            # # Power spectrogram
-            # x = x[...,0]**2 + x[...,1]**2
+            # Power spectrogram
+            x = x[...,0]**2 + x[...,1]**2
 
-            # # Apply log
-            # x = torch.log(x + eps)
+            # Apply log
+            x = torch.log(x + eps)
+
+            # Swap x_dim and seq_length axes
+            x = x.transpose(1,-1) # (B,T,*)
+
+            # Reduce length of x
+            x = x[:,:v.shape[1]]
 
             # Normalize power spectrogram
             if std_norm:
@@ -272,6 +301,29 @@ def main():
                                                 lengths.to(device, non_blocking=non_blocking)
                     # x, v, y = x.to(device, non_blocking=non_blocking),\
                                             # y.long().to(device, non_blocking=non_blocking)
+                
+                # TF representation (PyTorch)
+                x = stft_pytorch(x,
+                        fs=fs,
+                        wlen_sec=wlen_sec,
+                        win=window, 
+                        hop_percent=hop_percent,
+                        center=center,
+                        pad_mode=pad_mode,
+                        pad_at_end=pad_at_end) # shape = (freq_bins, frames)
+
+                # Power spectrogram
+                x = x[...,0]**2 + x[...,1]**2
+
+                # Apply log
+                x = torch.log(x + eps)
+
+                # Swap x_dim and seq_length axes
+                x = x.transpose(1,-1)
+
+                # Reduce length of x
+                x = x[:,:v.shape[1]]
+
                 # Normalize power spectrogram
                 if std_norm:
                     x_norm = x - audio_mean.T
