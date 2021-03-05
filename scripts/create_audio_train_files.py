@@ -28,7 +28,8 @@ if dataset_name == 'ntcd_timit':
 
 # Parameters
 ## Dataset
-dataset_types = ['train', 'validation']
+# dataset_types = ['train', 'validation']
+dataset_types = ['test']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
@@ -89,7 +90,10 @@ def process_write_label(args):
     # Separate args
     input_clean_file_path, output_clean_file_path, mat_file_path = args[0], args[1], args[2]
 
-    copyfile(input_video_dir + input_clean_file_path, output_video_dir + output_clean_file_path)
+    output_wav_file = output_video_dir + output_clean_file_path
+    os.makedirs(os.path.dirname(output_wav_file), exist_ok=True)
+
+    copyfile(input_video_dir + input_clean_file_path, output_wav_file)
 
     # Read clean speech
     speech, fs_speech = torchaudio.load(input_video_dir + input_clean_file_path)

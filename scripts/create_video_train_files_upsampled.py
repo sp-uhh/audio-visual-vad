@@ -15,7 +15,8 @@ import time
 
 from packages.processing.stft import stft
 from packages.processing.video import preprocess_ntcd_matlab
-from packages.processing.target import noise_robust_clean_speech_VAD, noise_robust_clean_speech_IBM # because clean audio is very noisy
+from packages.processing.target import clean_speech_VAD, clean_speech_IBM,\
+                                noise_robust_clean_speech_IBM # because clean audio is very noisy
 
 # Parameters
 dataset_name = 'ntcd_timit'
@@ -25,12 +26,11 @@ if dataset_name == 'ntcd_timit':
 ## Dataset
 # dataset_types = ['train']
 # dataset_types = ['validation']
-dataset_types = ['train', 'validation']
-# dataset_types = ['test']
+# dataset_types = ['train', 'validation']
+dataset_types = ['test']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
-output_data_folder = 'export'
 
 # Labels
 # labels = 'vad_labels'
@@ -54,17 +54,13 @@ width = 67
 height = 67
 crf = 0 #set the constant rate factor to 0, which is lossless
 
-## Noise robust VAD / IBM
-# vad_quantile_fraction_begin = 0.93
-# vad_quantile_fraction_end = 0.999
-# ibm_quantile_fraction = 0.999
-# ibm_quantile_weight = 0.999
+## Noise robust VAD
+vad_threshold = 1.70
+
+## Noise robust IBM
 eps = 1e-8
-vad_quantile_fraction_begin = 0.5
-vad_quantile_fraction_end = 0.55
-vad_quantile_weight = 1.0
-ibm_quantile_fraction = 0.25
-ibm_quantile_weight = 1.0
+ibm_threshold = 50 # Hard threshold
+# ibm_threshold = 65 # Soft threshold
 
 # HDF5 parameters
 rdcc_nbytes = 1024**2*40 # The number of bytes to use for the chunk cache
@@ -169,20 +165,35 @@ def process_write_video(args):
 
     if labels == 'vad_labels':
         # Compute vad
-        speech_vad = noise_robust_clean_speech_VAD(speech_tf,
-                                            quantile_fraction_begin=vad_quantile_fraction_begin,
-                                            quantile_fraction_end=vad_quantile_fraction_end,
-                                            quantile_weight=vad_quantile_weight)
+        speech_vad = clean_speech_VAD(speech_tf,
+                                      fs=fs,
+                                      wlen_sec=wlen_sec,
+                                      hop_percent=hop_percent,
+                                      center=center,
+                                      pad_mode=pad_mode,
+                                      pad_at_end=pad_at_end,
+                                      vad_threshold=vad_threshold)
 
         label = speech_vad
 
     if labels == 'ibm_labels':
         # binary mask
-        speech_ibm = noise_robust_clean_speech_IBM(speech_tf,
-                                            vad_quantile_fraction_begin=vad_quantile_fraction_begin,
-                                            vad_quantile_fraction_end=vad_quantile_fraction_end,
-                                            ibm_quantile_fraction=ibm_quantile_fraction,
-                                            quantile_weight=ibm_quantile_weight)
+        speech_ibm = clean_speech_IBM(speech_tf,
+                                      eps=eps,
+                                      ibm_threshold=ibm_threshold)
+
+        # speech_ibm = noise_robust_clean_speech_IBM(s_t_torch.numpy(),
+        #                                            s_tf_torch,
+        #                                            fs=fs,
+        #                                            wlen_sec=wlen_sec,
+        #                                            hop_percent=hop_percent,
+        #                                            center=center,
+        #                                            pad_mode=pad_mode,
+        #                                            pad_at_end=pad_at_end,
+        #                                            vad_threshold=vad_threshold,
+        #                                            eps=eps,
+        #                                            ibm_threshold=ibm_threshold)        label = speech_ibm
+
         label = speech_ibm
 
     # Reduce frames of video or label
@@ -193,7 +204,7 @@ def process_write_video(args):
 
     # Store data in h5_file
     output_h5_file = output_video_dir + mat_file_path
-    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '_upsampled.h5'
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
         os.makedirs(os.path.dirname(output_h5_file))
