@@ -24,8 +24,8 @@ dataset_size = 'complete'
 dataset_name = 'ntcd_timit'
 
 # Labels
-# labels = 'vad_labels'
-labels = 'ibm_labels'
+labels = 'vad_labels'
+# labels = 'ibm_labels'
 
 ## STFT
 fs = int(16e3) # Sampling rate
@@ -36,7 +36,7 @@ center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectru
 pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 
-# System 
+# System
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:0"
 device = torch.device(cuda_device if cuda else "cpu")
@@ -52,21 +52,22 @@ rdcc_nslots = 1e5 # The number of slots in the cache's hash table
                   # (see https://docs.h5py.org/en/stable/high/file.html?highlight=rdcc#chunk-cache)
 
 # Deep Generative Model
-x_dim = 513 
+x_dim = 513
 if labels == 'vad_labels':
     y_dim = 1
 if labels == 'ibm_labels':
     y_dim = 513
 # h_dim = [128, 128]
 lstm_layers = 2
-lstm_hidden_size = 1024 
-use_mcb=False
+lstm_hidden_size = 1024
+use_mcb=True
 batch_norm=False
 std_norm =True
 eps = 1e-8
 
 # Training
 batch_size = 32
+# batch_size = 16
 # batch_size = 2
 learning_rate = 1e-4
 # weight_decay = 1e-4
@@ -76,11 +77,20 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'AV_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_video_batchnorm_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_video_dropout_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_1024_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_1024_ssr_relu_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_512_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_vad_mcb_512_ssr_relu_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_256_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     # model_name = 'AV_Classifier_mcb_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'AV_Classifier_batchnorm_resnet_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_batchnorm_resnet_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_ibm_novideo_batchnorm_resnet_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'dummy_AV_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 # Data directories
@@ -91,37 +101,37 @@ video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', datase
 #####################################################################################################
 
 print('Load data')
-# train_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
-#                                                               dataset_size=dataset_size, labels=labels,
-#                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
-#                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
-# valid_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
-#                                                               dataset_size=dataset_size, labels=labels,
-#                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
-#                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
-
-# train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
-#                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-#                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
-# valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
-#                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-#                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
-
-train_dataset = AudioVisualSequenceWavLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
+train_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
                                                               dataset_size=dataset_size, labels=labels,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
-valid_dataset = AudioVisualSequenceWavLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
+valid_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
                                                               dataset_size=dataset_size, labels=labels,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
-                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
+                                                              center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
-                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV_waveform)
-valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None, 
-                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 
-                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV_waveform)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None,
+                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory,
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
+valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None,
+                        batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory,
+                        drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV)
+
+# train_dataset = AudioVisualSequenceWavLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
+#                                                               dataset_size=dataset_size, labels=labels,
+#                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
+#                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
+# valid_dataset = AudioVisualSequenceWavLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
+#                                                               dataset_size=dataset_size, labels=labels,
+#                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
+#                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
+
+# train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None,
+#                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory,
+#                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV_waveform)
+# valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, sampler=None,
+#                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory,
+#                         drop_last=False, timeout=0, worker_init_fn=None, collate_fn=collate_many2many_AV_waveform)
 
 
 print('- Number of training samples: {}'.format(len(train_dataset)))
@@ -177,8 +187,8 @@ def main():
         video_std = torch.tensor(video_std).to(device)
 
     # Start log file
-    file = open(model_dir + '/' +'output_batch.log','w') 
-    file = open(model_dir + '/' +'output_epoch.log','w') 
+    file = open(model_dir + '/' +'output_batch.log','w')
+    file = open(model_dir + '/' +'output_epoch.log','w')
 
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
@@ -200,27 +210,27 @@ def main():
                                         y.long().to(device, non_blocking=non_blocking),\
                                             lengths.to(device, non_blocking=non_blocking)
 
-            # TF representation (PyTorch)
-            x = stft_pytorch(x,
-                    fs=fs,
-                    wlen_sec=wlen_sec,
-                    win=window, 
-                    hop_percent=hop_percent,
-                    center=center,
-                    pad_mode=pad_mode,
-                    pad_at_end=pad_at_end) # shape = (freq_bins, frames)
+            # # TF representation (PyTorch)
+            # x = stft_pytorch(x,
+            #         fs=fs,
+            #         wlen_sec=wlen_sec,
+            #         win=window,
+            #         hop_percent=hop_percent,
+            #         center=center,
+            #         pad_mode=pad_mode,
+            #         pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-            # Power spectrogram
-            x = x[...,0]**2 + x[...,1]**2
+            # # Power spectrogram
+            # x = x[...,0]**2 + x[...,1]**2
 
-            # Apply log
-            x = torch.log(x + eps)
+            # # Apply log
+            # x = torch.log(x + eps)
 
-            # Swap x_dim and seq_length axes
-            x = x.transpose(1,-1) # (B,T,*)
+            # # Swap x_dim and seq_length axes
+            # x = x.transpose(1,-1) # (B,T,*)
 
-            # Reduce length of x
-            x = x[:,:v.shape[1]]
+            # # Reduce length of x
+            # x = x[:,:v.shape[1]]
 
             # Normalize power spectrogram
             if std_norm:
@@ -230,7 +240,7 @@ def main():
                 v_norm = v - video_mean.T
                 v_norm /= (video_std + eps).T
 
-                y_hat_soft = model(x_norm, v_norm, lengths) 
+                y_hat_soft = model(x_norm, v_norm, lengths)
             else:
                 y_hat_soft = model(x, v, lengths)
 
@@ -241,7 +251,7 @@ def main():
                 loss += binary_cross_entropy(pred[:length], target[:length], eps)
             # loss /= len(lengths)
             # loss = binary_cross_entropy(y_hat_soft, y, eps)
-            
+
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -277,7 +287,7 @@ def main():
             if batch_idx % log_interval == 0:
                 print(('Train Epoch: {:2d}   [{:4d}/{:4d} ({:2d}%)]    Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1-score.: {:.2f}'\
                     + '').format(epoch, batch_idx*len(x), len(train_loader.dataset), int(100.*batch_idx/len(train_loader)),\
-                            loss.item(), accuracy.item(), precision.item(), recall.item(), f1_score.item()), 
+                            loss.item(), accuracy.item(), precision.item(), recall.item(), f1_score.item()),
                     file=open(model_dir + '/' + 'output_batch.log','a'))
 
         if epoch % 1 == 0:
@@ -291,9 +301,9 @@ def main():
             print(("[Train]       Loss: {:.2f}    Accuracy: {:.2f}    Precision: {:.2f}    Recall: {:.2f}    F1_score: {:.2f}"\
                 + '').format(total_loss / t, total_accuracy / t, total_precision / t, total_recall / t, total_f1_score / t),
                 file=open(model_dir + '/' + 'output_epoch.log','a'))
-            
+
             total_loss, total_accuracy, total_precision, total_recall, total_f1_score = (0, 0, 0, 0, 0)
-            
+
             for batch_idx, (lengths, x, v, y) in tqdm(enumerate(valid_loader)):
                 if cuda:
                     x, v, y, lengths = x.to(device, non_blocking=non_blocking),\
@@ -302,28 +312,28 @@ def main():
                                                 lengths.to(device, non_blocking=non_blocking)
                     # x, v, y = x.to(device, non_blocking=non_blocking),\
                                             # y.long().to(device, non_blocking=non_blocking)
-                
-                # TF representation (PyTorch)
-                x = stft_pytorch(x,
-                        fs=fs,
-                        wlen_sec=wlen_sec,
-                        win=window, 
-                        hop_percent=hop_percent,
-                        center=center,
-                        pad_mode=pad_mode,
-                        pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-                # Power spectrogram
-                x = x[...,0]**2 + x[...,1]**2
+                # # TF representation (PyTorch)
+                # x = stft_pytorch(x,
+                #         fs=fs,
+                #         wlen_sec=wlen_sec,
+                #         win=window,
+                #         hop_percent=hop_percent,
+                #         center=center,
+                #         pad_mode=pad_mode,
+                #         pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-                # Apply log
-                x = torch.log(x + eps)
+                # # Power spectrogram
+                # x = x[...,0]**2 + x[...,1]**2
 
-                # Swap x_dim and seq_length axes
-                x = x.transpose(1,-1)
+                # # Apply log
+                # x = torch.log(x + eps)
 
-                # Reduce length of x
-                x = x[:,:v.shape[1]]
+                # # Swap x_dim and seq_length axes
+                # x = x.transpose(1,-1)
+
+                # # Reduce length of x
+                # x = x[:,:v.shape[1]]
 
                 # Normalize power spectrogram
                 if std_norm:
@@ -333,10 +343,10 @@ def main():
                     v_norm = v - video_mean.T
                     v_norm /= (video_std + eps).T
 
-                    y_hat_soft = model(x_norm, v_norm, lengths) 
+                    y_hat_soft = model(x_norm, v_norm, lengths)
                 else:
                     y_hat_soft = model(x, v, lengths)
-                
+
                 # y_hat_soft = torch.squeeze(y_hat_soft)
                 loss = 0.
                 for (length, pred, target) in zip(lengths, y_hat_soft, y):

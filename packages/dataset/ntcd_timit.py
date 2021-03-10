@@ -134,7 +134,7 @@ def proc_video_audio_pair_dict(input_video_dir,
     else:
         video_file_paths = sorted(glob(video_dir + '**/*' + '.h5',recursive=True))
 
-    audio_file_paths = sorted(glob(audio_dir + '**/*' + '.h5',recursive=True))
+    audio_file_paths = sorted(glob(audio_dir + '**/*' + '_' + labels + '.h5',recursive=True))
     
     # Remove input_video_dir from file_paths
     video_file_paths = [os.path.relpath(path, input_video_dir) for path in video_file_paths]

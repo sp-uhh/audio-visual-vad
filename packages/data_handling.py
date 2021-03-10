@@ -442,6 +442,7 @@ class AudioVisualSequenceLabeledFrames(Dataset):
        
         # Read video
         output_h5_file = clean_file_path.replace('Clean', 'matlab_raw')
+        output_h5_file = output_h5_file.replace('_' + self.labels, '')
         output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
         output_h5_file = self.input_video_dir + output_h5_file
 
@@ -519,6 +520,7 @@ class AudioVisualSequenceWavLabeledFrames(Dataset):
        
         # Read video
         output_h5_file = clean_file_path.replace('Clean', 'matlab_raw')
+        output_h5_file = output_h5_file.replace('_' + self.labels, '')
         output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
         output_h5_file = self.input_video_dir + output_h5_file
 

@@ -28,11 +28,11 @@ if dataset_name == 'ntcd_timit':
 
 # Parameters
 ## Dataset
-dataset_types = ['train', 'validation']
-# dataset_types = ['test']
+# dataset_types = ['train', 'validation']
+dataset_types = ['test']
 
-# dataset_size = 'subset'
-dataset_size = 'complete'
+dataset_size = 'subset'
+# dataset_size = 'complete'
 
 # Labels
 labels = 'vad_labels'
@@ -188,25 +188,25 @@ def process_write_label(args):
         fy.resize((fy.shape[-1] + label.shape[-1]), axis = len(fy.shape)-1)
         fy[...,-label.shape[-1]:] = label
     
-    # Compute mean, std
-    if dataset_type == 'train':
-        spectrogram = np.power(abs(speech_tf), 2)
+    # # Compute mean, std
+    # if dataset_type == 'train':
+    #     spectrogram = np.power(abs(speech_tf), 2)
 
-        # Apply log
-        spectrogram = np.log(spectrogram + eps)
+    #     # Apply log
+    #     spectrogram = np.log(spectrogram + eps)
 
-        # Reduce frames of spectrogram or label
-        if label.shape[-1] < spectrogram.shape[-1]:
-            spectrogram = spectrogram[...,:label.shape[-1]]
-        if label.shape[-1] > spectrogram.shape[-1]:
-            label = label[...,:spectrogram.shape[-1]]
+    #     # Reduce frames of spectrogram or label
+    #     if label.shape[-1] < spectrogram.shape[-1]:
+    #         spectrogram = spectrogram[...,:label.shape[-1]]
+    #     if label.shape[-1] > spectrogram.shape[-1]:
+    #         label = label[...,:spectrogram.shape[-1]]
 
-        # VAR = E[X**2] - E[X]**2
-        n_samples = spectrogram.shape[-1]
-        channels_sum = np.sum(spectrogram, axis=-1)
-        channels_squared_sum = np.sum(spectrogram**2, axis=-1)
+    #     # VAR = E[X**2] - E[X]**2
+    #     n_samples = spectrogram.shape[-1]
+    #     channels_sum = np.sum(spectrogram, axis=-1)
+    #     channels_squared_sum = np.sum(spectrogram**2, axis=-1)
 
-        return n_samples, channels_sum, channels_squared_sum
+    #     return n_samples, channels_sum, channels_squared_sum
 
 def process_write_noisy_audio(args):
     # Separate args
@@ -296,7 +296,8 @@ def main():
         #     process_write_label(arg)
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            train_stats = executor.map(process_write_label, args)
+            # train_stats = executor.map(process_write_label, args)
+            executor.map(process_write_label, args)
 
         t2 = time.perf_counter()
         print(f'Finished in {t2 - t1} seconds')

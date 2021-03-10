@@ -109,7 +109,8 @@ def binary_cross_entropy(r, x, eps):
     # return -torch.mean(torch.sum(x*torch.log(r + eps) + (1 - x)*torch.log(1 - r + eps), dim=-1))
     # return -torch.mean(torch.sum(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1))
     # return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r)), dim=-1)
-    return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r))) # Average over (T,*)
+    # return -torch.mean(x*torch.log(torch.sigmoid(r)) + (1 - x)*torch.log(1 - torch.sigmoid(r))) # Average over (T,*)
+    return -torch.mean(x*torch.log(torch.sigmoid(r) + eps) + (1 - x)*torch.log(1 - torch.sigmoid(r) + eps)) # Average over (T,*)
     # return -torch.mean(x*torch.log(r + eps) + (1 - x)*torch.log(1 - r + eps)) # Average over (T,*)
 
 def binary_cross_entropy_2classes(r1, r2, x, eps):

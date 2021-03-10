@@ -3,10 +3,8 @@ sys.path.append('.')
 
 import os
 import numpy as np
-import torch
-import soundfile as sf
+import torch, torchaudio
 import librosa
-import json
 import matplotlib.pyplot as plt
 import concurrent.futures # for multiprocessing
 import time
@@ -17,25 +15,24 @@ import cv2
 import h5py as h5
 
 from packages.metrics import energy_ratios, compute_stats
-from pystoi import stoi
-from pesq import pesq
-#from uhh_sp.evaluation import polqa
 
-from packages.processing.stft import stft, istft
+from packages.processing.stft import stft_pytorch
 from packages.visualization import display_multiple_signals
 from packages.models.utils import f1_loss
 
-# Dataset
-dataset_size = 'subset'
-# dataset_size = 'complete'
-
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
-    from packages.dataset.ntcd_timit import video_list, speech_list
+    from packages.dataset.ntcd_timit import proc_noisy_clean_pair_dict
+
+# Dataset
+# dataset_size = 'subset'
+dataset_size = 'complete'
 
 dataset_type = 'test'
-# labels = 'labels'
+
+# Labels
 labels = 'vad_labels'
+# labels = 'ibm_labels'
 upsampled = True
 
 # Parameters
@@ -57,6 +54,14 @@ width = 67
 height = 67
 crf = 0 #set the constant rate factor to 0, which is lossless
 
+## Noise robust VAD
+vad_threshold = 1.70
+
+## Noise robust IBM
+eps = 1e-8
+ibm_threshold = 50 # Hard threshold
+# ibm_threshold = 65 # Soft threshold
+
 ## Plot spectrograms
 vmin = -40 # in dB
 vmax = 20 # in dB
@@ -64,206 +69,257 @@ xticks_sec = 2.0 # in seconds
 fontsize = 30
 
 ## Stats
+#TODO: compute median
 confidence = 0.95 # confidence interval
 
-# if labels == 'labels':
-    # M2
-    # model_name = 'M2_hdim_128_128_zdim_032_end_epoch_100/M2_epoch_085_vloss_417.69'
-    # model_name = 'M2_hdim_128_128_zdim_032_end_epoch_100/M2_epoch_098_vloss_414.57'
-
-    # classifier
-    # classif_name = 'classif_normdataset_hdim_128_128_end_epoch_100/Classifier_epoch_096_vloss_57.53'
-    # classif_name = 'classif_normdataset_hdim_128_128_end_epoch_100/Classifier_epoch_073_vloss_56.43'
-    # classif_name = 'oracle_classif'
-    # classif_name = 'timo_classif'
-
+## Classifier
 if labels == 'vad_labels':
-    classif_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_005_vloss_0.32'
-    # x_dim = 513 # frequency bins (spectrogram)
-    # y_dim = 1
-    # h_dim_cl = [128, 128]
-    lstm_layers = 2
-    lstm_hidden_size = 1024
-    std_norm = True
-    batch_norm = False
-    eps = 1e-8
+    classif_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_009_vloss_16.64'
+
+if labels == 'ibm_labels':
+    classif_name = 'Audio_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_9.22'
 
 # Data directories
-input_video_dir = os.path.join('data',dataset_size,'processed/')
-input_speech_dir = os.path.join('data',dataset_size,'raw/')
+processed_data_dir = os.path.join('data',dataset_size,'processed/')
 classif_data_dir = os.path.join('data', dataset_size, 'models', classif_name + '/')
 
 ####################################################
 
 def compute_metrics_utt(args):
     # Separate args
-    mat_file_path, audio_file_path = args[0], args[1]
+    i, proc_noisy_file_path, clean_file_path = args[0], args[1], args[2]
 
-    # select utterance
-    h5_file_path = input_video_dir + mat_file_path
+    # Extract input SNR and noise type
+    snr_db = int(proc_noisy_file_path.split('/')[3])
+    noise_type = proc_noisy_file_path.split('/')[2]
 
-    # Open HDF5 file
+    # Read target
+    h5_file_path = processed_data_dir + clean_file_path
+
     with h5.File(h5_file_path, 'r') as file:
-        x_video = np.array(file["X"][:])
         y = np.array(file["Y"][:])
-        length = x_video.shape[-1]
+        y = torch.LongTensor(y) # Convert y to Tensor for f1-score
     
     # Output file
-    output_path = classif_data_dir + mat_file_path
+    output_path = classif_data_dir + proc_noisy_file_path
     output_path = os.path.splitext(output_path)[0]
 
     # Load y_hat_hard / y_hat_soft
-    y_hat_hard = np.load(output_path + '_y_hat_hard.npy')
-    y_hat_soft = np.load(output_path + '_y_hat_soft.npy')
+    y_hat_hard = torch.load(output_path + '_y_hat_hard.pt')
+    y_hat_soft = torch.load(output_path + '_y_hat_soft.pt')
+
+    if y.shape[-1] != y_hat_hard.shape[-1]:
+        print(i)
 
     ## F1 score
-    accuracy, precision, recall, f1_score = f1_loss(y_hat_hard=torch.flatten(torch.Tensor(y_hat_hard)), y=torch.flatten(torch.Tensor(y)), epsilon=eps)
+    accuracy, precision, recall, f1score_s_hat = f1_loss(y.flatten(), y_hat_hard.flatten(), epsilon=eps)
 
-    # make video with audio with target
-    # Create temporary file for video without audio
-    with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
-        out = skvideo.io.FFmpegWriter(tmp.name,
-                inputdict={'-r': str(visual_frame_rate_o),
-                        '-s':'{}x{}'.format(width,height)},
-                outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
-                            '-c:v': 'libx264',
-                            '-crf': str(crf),
-                            '-preset': 'veryslow'}
-        )
+    # Convert to float
+    accuracy = accuracy.item()
+    precision = precision.item()
+    recall = recall.item()
+    f1score_s_hat = f1score_s_hat.item()
 
-        # Write video
-        for j, x_video_frame in enumerate(x_video.T):
-            # Add label on the video
-            if y[...,j] == 1:
-                x_video_frame.T[-9:,-9:] = 255 # white square
-            out.writeFrame(x_video_frame.T)
-            
-        # close out the video writer
-        out.close()
-
-        # Add the audio using ffmpeg-python
-        video = ffmpeg.input(tmp.name)
-        audio = ffmpeg.input(input_speech_dir + audio_file_path)
-        out = ffmpeg.output(video, audio, os.path.splitext(output_path)[0] + '_oracle_audio.mp4', vcodec='copy', acodec='aac', strict='experimental')
-        out = out.overwrite_output()
-        out.run()
-
-    # make video with audio with pred
-    # Create temporary file for video without audio
-    with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
-        out = skvideo.io.FFmpegWriter(tmp.name,
-                inputdict={'-r': str(visual_frame_rate_o),
-                        '-s':'{}x{}'.format(width,height)},
-                outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
-                            '-c:v': 'libx264',
-                            '-crf': str(crf),
-                            '-preset': 'veryslow'}
-        )
-
-        # Write video
-        for j, x_video_frame in enumerate(x_video.T):
-            # Add label on the video
-            if y_hat_hard[...,j] == 1:
-                x_video_frame.T[-9:,-9:] = 255 # white square
-            out.writeFrame(x_video_frame.T)
-        
-        # close out the video writer
-        out.close()
-
-        # Add the audio using ffmpeg-python
-        video = ffmpeg.input(tmp.name)
-        audio = ffmpeg.input(input_speech_dir + audio_file_path)
-        out = ffmpeg.output(video, audio, os.path.splitext(output_path)[0] + '_pred_audio.mp4', vcodec='copy', acodec='aac', strict='experimental')
-        out = out.overwrite_output()
-        out.run()
-
-    #TODO: make video with y_hat_soft
+    # Clean wav path
+    clean_wav_path = os.path.splitext(clean_file_path)[0]
+    clean_wav_path = clean_wav_path.replace('_' + labels, '')
+    clean_wav_path = clean_wav_path + '.wav'
 
     # Read files
-    s_t, fs_s = sf.read(input_speech_dir + audio_file_path) # clean speech
+    s_t, fs_s = torchaudio.load(processed_data_dir + clean_wav_path)
+    s_t = s_t[0] # 1channel
+    x_t, fs_x = torchaudio.load(processed_data_dir + proc_noisy_file_path)
+    x_t = x_t[0] # 1channel
 
-    # TF representation
-    s_tf = stft(s_t,
-                fs=fs,
-                wlen_sec=wlen_sec,
-                win=win, 
-                hop_percent=hop_percent,
-                center=center,
-                pad_mode=pad_mode,
-                pad_at_end=pad_at_end,
-                dtype=dtype) # shape = (freq_bins, frames)
+    # x = x/np.max(x)
+    T_orig = len(x_t)
 
-    # Reduce size if larger than number of video frames
-    if s_tf.shape[-1] > x_video.shape[-1]:
-        s_tf = s_tf[...,:x_video.shape[-1]]
+    # Normalize audio
+    norm_max = torch.max(torch.abs(x_t))
+    x_t = x_t / norm_max
+    
+    # TF representation (PyTorch)
+    # Input should be (frames, freq_bins)
+    x_tf = stft_pytorch(x_t,
+            fs=fs,
+            wlen_sec=wlen_sec,
+            win=win, 
+            hop_percent=hop_percent,
+            center=center,
+            pad_mode=pad_mode,
+            pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-    # plots of target
+    # Real + j * Img
+    x_tf = x_tf[...,0].numpy() + 1j * x_tf[...,1].numpy()
+
+    # plots of target / estimation
+    # Normalize audio
+    s_t = s_t / norm_max
+
+    # TF representation (PyTorch)
+    s_tf = stft_pytorch(s_t,
+            fs=fs,
+            wlen_sec=wlen_sec,
+            win=win, 
+            hop_percent=hop_percent,
+            center=center,
+            pad_mode=pad_mode,
+            pad_at_end=pad_at_end) # shape = (freq_bins, frames)
+
+    # Real + j * Img
+    s_tf = s_tf[...,0].numpy() + 1j * s_tf[...,1].numpy()
+
+    # Reduce frames of audio
+    if y.shape[-1] < x_tf.shape[-1]:
+        x_tf = x_tf[...,:y.shape[-1]]
+        s_tf = s_tf[...,:y.shape[-1]]
+
     ## mixture signal (wav + spectro)
     ## target signal (wav + spectro + mask)
     ## estimated signal (wav + spectro + mask)
-
     signal_list = [
-        [s_t, s_tf, y], # clean speech
-        [None, None, y_hat_hard],
-        [None, None, y_hat_soft]
+        [x_t.numpy(), x_tf, None], # mixture: (waveform, tf_signal, no mask)
+        [s_t.numpy(), s_tf, y.numpy()], # clean speech
+        [None, y_hat_soft.numpy(), y_hat_hard.numpy()]
     ]
 
     fig = display_multiple_signals(signal_list,
                         fs=fs, vmin=vmin, vmax=vmax,
                         wlen_sec=wlen_sec, hop_percent=hop_percent,
-                        xticks_sec=xticks_sec, fontsize=fontsize)
+                        xticks_sec=xticks_sec, fontsize=fontsize,
+                        last_only_label=True)
     
     # put all metrics in the title of the figure
-    title = "Accuracy = {:.3f}  Precision = {:.3f}  \n" \
-        "Recall = {:.3f}  F1-score = {:.3f} \n".format(accuracy, precision, recall,f1_score)
+    title = "Input SNR = {:.1f} dB \n" \
+        "Noise type = {}, \n"\
+        "Accuracy = {:.3f},  "\
+        "Precision = {:.3f},  "\
+        "Recall = {:.3f},  "\
+        "F1-score = {:.3f}\n".format(snr_db, noise_type,\
+            accuracy, precision, recall, f1score_s_hat)
 
     fig.suptitle(title, fontsize=40)
 
     # Save figure
-    fig.savefig(output_path + '_fig.png')
+    output_path = classif_data_dir + proc_noisy_file_path
+    output_path = os.path.splitext(output_path)[0]
 
+    fig.savefig(output_path + '_hard_mask.png')
+    
     # Clear figure
     plt.close()
 
-    metrics = [accuracy, precision, recall, f1_score]
-    
-    return metrics
+
+    # # make video with audio with target
+    # # Create temporary file for video without audio
+    # with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
+    #     out = skvideo.io.FFmpegWriter(tmp.name,
+    #             inputdict={'-r': str(visual_frame_rate_o),
+    #                     '-s':'{}x{}'.format(width,height)},
+    #             outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+    #                         '-c:v': 'libx264',
+    #                         '-crf': str(crf),
+    #                         '-preset': 'veryslow'}
+    #     )
+
+    #     # Write video
+    #     for j, x_video_frame in enumerate(x_video.T):
+    #         # Add label on the video
+    #         if y[...,j] == 1:
+    #             x_video_frame.T[-9:,-9:] = 255 # white square
+    #         out.writeFrame(x_video_frame.T)
+            
+    #     # close out the video writer
+    #     out.close()
+
+    #     # Add the audio using ffmpeg-python
+    #     video = ffmpeg.input(tmp.name)
+    #     audio = ffmpeg.input(input_speech_dir + audio_file_path)
+    #     out = ffmpeg.output(video, audio, os.path.splitext(output_path)[0] + '_oracle_audio.mp4', vcodec='copy', acodec='aac', strict='experimental')
+    #     out = out.overwrite_output()
+    #     out.run()
+
+    # # make video with audio with pred
+    # # Create temporary file for video without audio
+    # with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
+    #     out = skvideo.io.FFmpegWriter(tmp.name,
+    #             inputdict={'-r': str(visual_frame_rate_o),
+    #                     '-s':'{}x{}'.format(width,height)},
+    #             outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+    #                         '-c:v': 'libx264',
+    #                         '-crf': str(crf),
+    #                         '-preset': 'veryslow'}
+    #     )
+
+    #     # Write video
+    #     for j, x_video_frame in enumerate(x_video.T):
+    #         # Add label on the video
+    #         if y_hat_hard[...,j] == 1:
+    #             x_video_frame.T[-9:,-9:] = 255 # white square
+    #         out.writeFrame(x_video_frame.T)
+        
+    #     # close out the video writer
+    #     out.close()
+
+    #     # Add the audio using ffmpeg-python
+    #     video = ffmpeg.input(tmp.name)
+    #     audio = ffmpeg.input(input_speech_dir + audio_file_path)
+    #     out = ffmpeg.output(video, audio, os.path.splitext(output_path)[0] + '_pred_audio.mp4', vcodec='copy', acodec='aac', strict='experimental')
+    #     out = out.overwrite_output()
+    #     out.run()
+
+    #TODO: make video with y_hat_soft
+
+    metrics = [accuracy, precision, recall, f1score_s_hat]
+
+    return metrics, snr_db, noise_type
 
 def main():
 
-    # Create file list
-    mat_file_paths = video_list(input_video_dir=input_video_dir,
-                            dataset_type=dataset_type,
-                            upsampled=upsampled)
+    # Dict mapping noisy speech to clean speech
+    noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=processed_data_dir,
+                                            dataset_type=dataset_type,
+                                            dataset_size=dataset_size,
+                                            labels=labels)
 
-    audio_file_paths = speech_list(input_speech_dir=input_speech_dir,
-                            dataset_type=dataset_type)
-
-    # Fuse both list
-    args = [[mat_file_path, audio_file_path] for mat_file_path, audio_file_path in zip(mat_file_paths, audio_file_paths)]
+    # Convert dict to tuples
+    args = list(noisy_clean_pair_paths.items())
+    args = [[i, j[0], j[1]] for i,j in enumerate(args)]
 
     t1 = time.perf_counter()
 
-    all_metrics = []
-    for arg in args:
-        metrics = compute_metrics_utt(arg)
-        all_metrics.append(metrics)
+    # all_metrics = []
+    # all_snr_db = []
+    # all_noise_types = []
+    # for arg in args:
+    #     metrics, snr_db, noise_type = compute_metrics_utt(arg)
+    #     all_metrics.append(metrics)
+    #     all_snr_db.append(snr_db)
+    #     all_noise_types.append(noise_type)
 
-    # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-    #     all_metrics = executor.map(compute_metrics_utt, args)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+        all_results = executor.map(compute_metrics_utt, args)
     
+    # Retrieve metrics and conditions
+    # Transform generator to list
+    all_results = list(all_results)
+    all_metrics = [i[0] for i in all_results]
+    all_snr_db = [i[1] for i in all_results]
+    all_noise_types = [i[2] for i in all_results]
+
     t2 = time.perf_counter()
     print(f'Finished in {t2 - t1} seconds')
 
-    # Transform generator to list
-    # all_metrics = list(all_metrics)
+
     metrics_keys = ['Accuracy', 'Precision', 'Recall', 'F1-score']
 
     # Compute & save stats
     compute_stats(metrics_keys=metrics_keys,
                   all_metrics=all_metrics,
                   model_data_dir=classif_data_dir,
-                  confidence=confidence)
+                  confidence=confidence,
+                  all_snr_db=all_snr_db,
+                  all_noise_types=all_noise_types)
 
 if __name__ == '__main__':
     main()

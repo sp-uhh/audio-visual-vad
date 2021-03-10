@@ -77,7 +77,8 @@ start_epoch = 1
 end_epoch = 100
 
 if labels == 'vad_labels':
-    model_name = 'Audio_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Audio_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     model_name = 'Audio_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -135,6 +136,7 @@ def main():
     if cuda: model = model.to(device)
 
     model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    # model = nn.parallel.DataParallel(model, device_ids=[4,5,6,7])
 
     if cuda: model = model.to(device)
 
@@ -153,6 +155,7 @@ def main():
             std = file['X_train_std'][:]
 
         # Save mean and std
+        #TODO: copy h5py file
         np.save(model_dir + '/' + 'trainset_mean.npy', mean)
         np.save(model_dir + '/' + 'trainset_std.npy', std)
 

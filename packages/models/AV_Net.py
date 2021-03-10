@@ -40,6 +40,7 @@ class DeepVAD_AV(nn.Module):
         if self.use_mcb:
             # self.mcb_output_size = 1024
             self.mcb_output_size = 512
+            # self.mcb_output_size = 256
             self.lstm_input_size = self.mcb_output_size
             # self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size).cuda()
             self.mcb = CompactBilinearPooling(self.num_audio_ftrs, self.num_video_ftrs, self.mcb_output_size)
@@ -69,6 +70,9 @@ class DeepVAD_AV(nn.Module):
 
     def forward(self, audio, video, lengths):
 
+        # # Try w/o video
+        # video[:] = 0.
+
         # Video branch
         batch, frames, height, width = video.size()
         channels = 3
@@ -88,10 +92,10 @@ class DeepVAD_AV(nn.Module):
         # Reshape to (batch , seq_len, Features)
         video = video.view(batch , frames, -1)
         
-        # Batch norm before concatenating
-        video = video.permute(1, 2, 0).contiguous()
-        video = self.bn(video)
-        video = video.permute(2, 0, 1).contiguous()
+        # # Batch norm before concatenating
+        # video = video.permute(1, 2, 0).contiguous()
+        # video = self.bn(video)
+        # video = video.permute(2, 0, 1).contiguous()
         
         # Audio branch
         # audio = self.wavenet_en(audio) # output shape - Batch X Features X seq len
@@ -106,7 +110,8 @@ class DeepVAD_AV(nn.Module):
             y = self.mcb(audio, video)
             # signed square root
             # y =  torch.mul(torch.sign(x), torch.sqrt(torch.abs(x) + 1e-12)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
-            y =  torch.mul(torch.sign(y), torch.sqrt(torch.abs(y) + self.eps)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
+            # y =  torch.mul(torch.sign(y), torch.sqrt(torch.abs(y) + self.eps)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
+            y =  torch.sqrt(F.relu(y)) - torch.sqrt(F.relu(-y))
             # L2 normalization
             y = y / torch.norm(y, p=2).detach()
 

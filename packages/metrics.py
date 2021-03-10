@@ -59,7 +59,12 @@ def energy_ratios(s_hat, s, n):
 
     return si_sdr, si_sir, si_sar
 
-def compute_stats(metrics_keys, all_metrics, model_data_dir, confidence):
+def compute_stats(metrics_keys,
+                  all_metrics,
+                  model_data_dir,
+                  confidence,
+                  all_snr_db=None,
+                  all_noise_types=None):
 
     # Dictionary with all metrics
     metrics = {}
@@ -82,15 +87,30 @@ def compute_stats(metrics_keys, all_metrics, model_data_dir, confidence):
     #     json.dump(stats, f)
     
     # #TODO: Metrics by gender?
-    # for snr_db in np.unique(all_snr_db):
-    #     stats = {}
+    if all_snr_db is not None:
+        for snr_db in np.unique(all_snr_db):
+            stats = {}
 
-    #     print('Input SNR = {:.2f}'.format(snr_db))
-    #     # Print the names of the columns. 
-    #     print ("{:<10} {:<10} {:<10}".format('METRIC', 'AVERAGE', 'CONF. INT.')) 
-    #     for key, metric in metrics.items():
-    #         subset_metric = np.array(metric)[np.where(all_snr_db == snr_db)]
-    #         m, h = mean_confidence_interval(subset_metric, confidence=confidence)
-    #         stats[key] = {'avg': m, '+/-': h}
-    #         print ("{:<10} {:<10} {:<10}".format(key, m, h))
-    #     print('\n')
+            print('Input SNR = {:.2f}'.format(snr_db))
+            # Print the names of the columns. 
+            print ("{:<10} {:<10} {:<10}".format('METRIC', 'AVERAGE', 'CONF. INT.')) 
+            for key, metric in metrics.items():
+                subset_metric = np.array(metric)[np.where(all_snr_db == snr_db)]
+                m, h = mean_confidence_interval(subset_metric, confidence=confidence)
+                stats[key] = {'avg': m, '+/-': h}
+                print ("{:<10} {:<10} {:<10}".format(key, m, h))
+            print('\n')
+
+    if all_noise_types is not None:
+        for noise_type in set(all_noise_types):
+            stats = {}
+
+            print('Noise type = {}'.format(noise_type))
+            # Print the names of the columns. 
+            print ("{:<10} {:<10} {:<10}".format('METRIC', 'AVERAGE', 'CONF. INT.')) 
+            for key, metric in metrics.items():
+                subset_metric = [i for i, x in zip(metric, all_noise_types) if x == noise_type]
+                m, h = mean_confidence_interval(subset_metric, confidence=confidence)
+                stats[key] = {'avg': m, '+/-': h}
+                print ("{:<10} {:<10} {:<10}".format(key, m, h))
+            print('\n')

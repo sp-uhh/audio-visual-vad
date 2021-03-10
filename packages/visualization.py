@@ -205,7 +205,8 @@ def display_multiple_signals(signal_list,
                              wlen_sec=50e-3,
                              hop_percent=0.5,
                              xticks_sec=1.0,
-                             fontsize=50):
+                             fontsize=50,
+                             last_only_label=False):
     """Generate waveplot + spectrogram + mask of multiple signals
 
     Args:
@@ -246,12 +247,16 @@ def display_multiple_signals(signal_list,
             # image plot
             #ax = plt.subplot(gs[(i+2)])
             ax = plt.subplot(gs[3*(i+3)])
-            display_spectrogram(x_tf, True, fs, vmin, vmax, wlen_sec, hop_percent, xticks_sec, 'magma', fontsize)
-
-            # color bar in it's own axis
-            #colorAx = plt.subplot(gs[(i+2)*nb_signals + 1])
-            colorAx = plt.subplot(gs[3*(i+3) + 1])
-            cbar = plt.colorbar(cax=colorAx, format='%+2.0f dB')
+            if last_only_label and i == len(signal_list) - 1:
+                display_spectrogram(x_tf, False, fs, 0, 1, wlen_sec, hop_percent, xticks_sec, 'Greys_r', fontsize)
+                colorAx = plt.subplot(gs[3*(i+3) + 1])
+                plt.colorbar(cax=colorAx, format='%0.1f')
+            else:
+                display_spectrogram(x_tf, True, fs, vmin, vmax, wlen_sec, hop_percent, xticks_sec, 'magma', fontsize)
+                # color bar in it's own axis
+                #colorAx = plt.subplot(gs[(i+2)*nb_signals + 1])
+                colorAx = plt.subplot(gs[3*(i+3) + 1])
+                cbar = plt.colorbar(cax=colorAx, format='%+2.0f dB')
 
         if not (x_ibm is None):
             # image plot

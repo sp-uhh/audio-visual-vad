@@ -23,12 +23,11 @@ from packages.utils import count_parameters, my_collate, collate_many2many_video
 dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
-data_dir = 'export'
 upsampled = True
 
 # Labels
-# labels = 'vad_labels'
-labels = 'ibm_labels'
+labels = 'vad_labels'
+# labels = 'ibm_labels'
 
 # System 
 cuda = torch.cuda.is_available()
@@ -60,6 +59,7 @@ eps = 1e-8
 
 # Training
 batch_size = 16
+# batch_size = 2
 learning_rate = 1e-4
 # weight_decay = 1e-4
 # momentum = 0.9
@@ -69,7 +69,8 @@ end_epoch = 100
 
 if labels == 'vad_labels':
     # model_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -115,6 +116,7 @@ def main():
     if cuda: model = model.to(device)
 
     model = nn.parallel.DataParallel(model, device_ids=[0,1,2,3])
+    # model = nn.parallel.DataParallel(model, device_ids=[4,5,6,7])
 
     if cuda: model = model.to(device)
 
