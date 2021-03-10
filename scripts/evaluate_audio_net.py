@@ -50,14 +50,6 @@ pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 dtype = 'complex64'
 
-## Noise robust VAD
-vad_threshold = 1.70
-
-## Noise robust IBM
-eps = 1e-8
-ibm_threshold = 50 # Hard threshold
-# ibm_threshold = 65 # Soft threshold
-
 ## Plot spectrograms
 vmin = -40 # in dB
 vmax = 20 # in dB
