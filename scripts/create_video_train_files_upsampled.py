@@ -12,6 +12,9 @@ import subprocess as sp
 import skvideo.io
 import concurrent.futures # for multiprocessing
 import time
+import kaldiio
+from scipy.fftpack import idct
+import cv2
 
 from packages.processing.stft import stft
 from packages.processing.video import preprocess_ntcd_matlab
@@ -21,11 +24,9 @@ from packages.processing.target import clean_speech_VAD, clean_speech_IBM,\
 # Parameters
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
-    from packages.dataset.ntcd_timit import video_list, speech_list
+    from packages.dataset.ntcd_timit import video_list, kaldi_list, speech_list
 
 ## Dataset
-# dataset_types = ['train']
-# dataset_types = ['validation']
 dataset_types = ['train', 'validation']
 # dataset_types = ['test']
 
@@ -33,26 +34,32 @@ dataset_types = ['train', 'validation']
 dataset_size = 'complete'
 
 # Labels
-# labels = 'vad_labels'
-labels = 'ibm_labels'
+labels = 'vad_labels'
+# labels = 'ibm_labels'
+
+## Video
+visual_frame_rate_i = 30 # initial visual frames per second
+width = 67
+height = 67
+crf = 0 #set the constant rate factor to 0, which is lossless
 
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
-hop_percent = 0.25 # hop size as a percentage of the window length
+hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
 pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 dtype = 'complex64'
 
-## Video
-visual_frame_rate_i = 30 # initial visual frames per second
-visual_frame_rate_o = 1 / (wlen_sec * hop_percent)
-width = 67
-height = 67
-crf = 0 #set the constant rate factor to 0, which is lossless
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
+# visual_frame_rate_o = 1 / (wlen_sec * hop_percent)
+# width = 67
+# height = 67
+# crf = 0 #set the constant rate factor to 0, which is lossless
 
 ## Noise robust VAD
 vad_threshold = 1.70
@@ -112,19 +119,46 @@ def process_write_video(args):
         out = skvideo.io.FFmpegWriter(tmp.name,
                     inputdict={'-r': str(visual_frame_rate_i),
                             '-s':'{}x{}'.format(width,height)},
-                    outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+                    # outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+                    outputdict={'-r': str(visual_frame_rate_i),
                                 '-c:v': 'libx264',
                                 '-crf': str(crf),
                                 '-preset': 'veryslow'}
         )
         
         # Write and upsample video
+        # for frame in range(matlab_frames_list_per_user.shape[0]):
+        #     rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
+        #                         frame=frame,
+        #                         width=width,
+        #                         height=height,
+        #                         y_hat_hard=None)
+        
+        A = np.zeros_like(matlab_frames_list_per_user)
+        A = A.reshape(-1, width, height)
+        # Write and upsample video
         for frame in range(matlab_frames_list_per_user.shape[0]):
-            rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
-                                frame=frame,
-                                width=width,
-                                height=height,
-                                y_hat_hard=None)
+            # rgb_rotated_df = preprocess_ntcd_matlab(matlab_frames=matlab_frames_list_per_user,
+            #                     frame=frame,
+            #                     width=width,
+            #                     height=height,
+            #                     y_hat_hard=y_hat_hard)
+
+            data_frame = matlab_frames_list_per_user[frame]  # data frame will be shortened to "df" below
+            reshaped_df = data_frame.reshape(width, height)
+            idct_df = idct(idct(reshaped_df).T).T
+            A[frame] = idct_df
+
+        for frame in range(A.shape[0]):
+            #TODO: take the largest max - min differences among the frames
+            #TODO: divide by idct
+            data_frame = A[frame]
+            normalized_df = (data_frame - A.min()) / (A.max(axis=(-2,-1)) - A.min(axis=(-2,-1))).max() * 255.0
+            rotated_df = np.rot90(normalized_df, 3)
+
+            # Duplicate channel to visualize video
+            rgb_rotated_df = cv2.merge([rotated_df] * 3)                       
+            
             out.writeFrame(rgb_rotated_df)
                 
         # close out the video writer
@@ -139,9 +173,10 @@ def process_write_video(args):
         video = video[:,:,0] # (height, width, frames)
         
         # # Just use the unprocessed matlab files
+        # #TODO: upsample....
         # video = matlab_frames_list_per_user.swapaxes(0,1)
         # video = video.reshape(height, width, -1)
-        # # video = np.repeat(video[:,:,None],3,axis=2)
+        # # # video = np.repeat(video[:,:,None],3,axis=2)
     
     # Read clean speech
     speech, fs_speech = sf.read(input_video_dir + input_clean_file_path, samplerate=None)
@@ -165,7 +200,7 @@ def process_write_video(args):
 
     if labels == 'vad_labels':
         # Compute vad
-        speech_vad = clean_speech_VAD(speech_tf,
+        speech_vad = clean_speech_VAD(speech,
                                       fs=fs,
                                       wlen_sec=wlen_sec,
                                       hop_percent=hop_percent,
@@ -192,7 +227,7 @@ def process_write_video(args):
         #                                            pad_at_end=pad_at_end,
         #                                            vad_threshold=vad_threshold,
         #                                            eps=eps,
-        #                                            ibm_threshold=ibm_threshold)        label = speech_ibm
+        #                                            ibm_threshold=ibm_threshold) 
 
         label = speech_ibm
 
@@ -204,7 +239,10 @@ def process_write_video(args):
 
     # Store data in h5_file
     output_h5_file = output_video_dir + mat_file_path
-    output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_dct.h5'
+    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_.h5'
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_normvideo.h5'
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
         os.makedirs(os.path.dirname(output_h5_file))
@@ -255,9 +293,18 @@ def process_write_video(args):
     # Compute mean, std
     if dataset_type == 'train':
         # VAR = E[X**2] - E[X]**2
-        n_samples = video.shape[-1]
-        channels_sum = np.sum(video, axis=-1)
-        channels_squared_sum = np.sum(video**2, axis=-1)
+        # n_samples = video.shape[-1]
+        # channels_sum = np.sum(video, axis=-1)
+        # channels_squared_sum = np.sum(video**2, axis=-1)
+
+        n_samples = np.prod(video.shape)
+        channels_sum = np.sum(video)
+        channels_squared_sum = np.sum(video**2)
+
+        # n_samples = video.shape[-1]
+        # mean_pixel = np.mean(video, axis=(0,1))
+        # channels_sum = np.sum(mean_pixel)
+        # channels_squared_sum = np.sum(mean_pixel**2)
 
         return n_samples, channels_sum, channels_squared_sum
 
@@ -270,7 +317,11 @@ def main():
         # Create file list
         mat_file_paths = video_list(input_video_dir=input_video_dir,
                                 dataset_type=dataset_type)
-        
+
+        # Create file list
+        ark_file_paths, scp_file_paths = kaldi_list(input_video_dir=input_video_dir,
+                                dataset_type=dataset_type)
+
         input_clean_file_paths, \
             output_clean_file_paths = speech_list(input_speech_dir=input_video_dir,
                                 dataset_type=dataset_type)
@@ -309,7 +360,11 @@ def main():
             std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
 
             # Save statistics
-            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel_dct' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'dct' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_statistics.h5')
+            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
             if not os.path.exists(os.path.dirname(output_dataset_file)):
                 os.makedirs(os.path.dirname(output_dataset_file))
 
@@ -319,8 +374,10 @@ def main():
                     del f['X_' + dataset_type + '_mean']
                     del f['X_' + dataset_type + '_std']
 
-                f.create_dataset('X_' + dataset_type + '_mean', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
-                f.create_dataset('X_' + dataset_type + '_std', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+                # f.create_dataset('X_' + dataset_type + '_mean', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+                # f.create_dataset('X_' + dataset_type + '_std', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+                f.create_dataset('X_' + dataset_type + '_mean', shape=(1,1), dtype='float32', maxshape=(1,1), chunks=None, compression=compression)
+                f.create_dataset('X_' + dataset_type + '_std', shape=(1,1), dtype='float32', maxshape=(1,1), chunks=None, compression=compression)
                 
                 f['X_' + dataset_type + '_mean'][:] = mean[..., None] # Add axis to fit chunks shape
                 f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape

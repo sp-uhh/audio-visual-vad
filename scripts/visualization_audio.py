@@ -36,8 +36,8 @@ dataset_size = 'subset'
 # dataset_size = 'complete'
 
 # Labels
-labels = 'ibm_labels'
-# labels = 'vad_labels'
+# labels = 'ibm_labels'
+labels = 'vad_labels'
 
 # Parameters
 ## STFT
@@ -45,8 +45,8 @@ labels = 'ibm_labels'
 visual_frame_rate = 30 # initial visual frames per second
 fs = int(16e3) # audio sampling rate
 wlen_sec = 0.064  # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
-hop_percent = 0.25  # hop size as a percentage of the window length
+hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = 0.25  # hop size as a percentage of the window length
 win = 'hann'  # type of window function (to perform filtering in the time domain)
 center = False  # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
 pad_mode = 'reflect'  # This argument is ignored if center = False
@@ -184,7 +184,8 @@ def process_audio(args):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     # fig.savefig(output_path + '_hard_' + labels + '_torch_transform.png')
-    fig.savefig(output_path + '_hard_' + labels + '_threshold.png')
+    # fig.savefig(output_path + '_hard_' + labels + '_threshold.png')
+    fig.savefig(output_path + '_hard_' + labels + '_30fps.png')
     # fig.savefig(output_path + '_hard_' + labels + '_threshold_50.png')
     # fig.savefig(output_path + '_hard_' + labels + '_threshold_11.png')
 

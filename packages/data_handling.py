@@ -190,7 +190,7 @@ class HDF5WholeSequenceSpectrogramLabeledFrames(Dataset):
             self.f.close()
 
 class WavWholeSequenceSpectrogramLabeledFrames(Dataset):
-    def __init__(self, input_video_dir, dataset_type, labels='vad_labels', upsampled=False):
+    def __init__(self, input_video_dir, dataset_type, labels='vad_labels', upsampled=False, dct=False, norm_video=False):
         # Do not load hdf5 in __init__ if num_workers > 0
         self.dataset_type = dataset_type        
         self.input_video_dir = input_video_dir
@@ -200,7 +200,9 @@ class WavWholeSequenceSpectrogramLabeledFrames(Dataset):
         self.video_file_paths, self.audio_file_paths = proc_video_audio_pair_dict(input_video_dir=input_video_dir,
                                                 dataset_type=dataset_type,
                                                 labels=labels,
-                                                upsampled=upsampled)
+                                                upsampled=upsampled,
+                                                dct=dct,
+                                                norm_video=norm_video)
         
         self.dataset_len = len(self.video_file_paths) # total number of utterances
 

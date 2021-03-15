@@ -84,7 +84,8 @@ if labels == 'vad_labels':
     # model_name = 'AV_Classifier_vad_mcb_1024_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_1024_ssr_relu_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_512_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'AV_Classifier_vad_mcb_512_ssr_relu_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_512_ssr_relu_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_vad_mcb_512_initial_eps_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_256_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':

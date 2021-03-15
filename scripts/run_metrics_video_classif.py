@@ -13,6 +13,7 @@ import ffmpeg
 import skvideo.io
 import cv2
 import h5py as h5
+import math
 
 from packages.metrics import energy_ratios, compute_stats
 
@@ -29,18 +30,27 @@ if dataset_name == 'ntcd_timit':
 dataset_size = 'complete'
 
 dataset_type = 'test'
+# dataset_type = 'validation'
 
 # Labels
 labels = 'vad_labels'
 # labels = 'ibm_labels'
-upsampled = True
+upsampled = False
+dct = False
+norm_video = True
+
+## Video
+visual_frame_rate_i = 30 # initial visual frames per second
+width = 67
+height = 67
+crf = 0 #set the constant rate factor to 0, which is lossless
 
 # Parameters
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
-hop_percent = 0.25 # hop size as a percentage of the window length
+hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
 pad_mode = 'reflect' # This argument is ignored if center = False
@@ -60,7 +70,21 @@ confidence = 0.95 # confidence interval
 
 ## Classifier
 if labels == 'vad_labels':
-    classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.48'
+    # classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.48'
+    # classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_100/Video_Net_epoch_012_vloss_4.53'
+    # classif_name = 'Video_Classifier_vad_dct_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.76'
+    # classif_name = 'Video_Classifier_vad_dct_align_shuffle_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.24'
+    # classif_name = 'Video_Classifier_vad_full_dct_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_5.52'
+    # classif_name = 'Video_Classifier_vad_full_dct_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_5.47'
+    # classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.48'
+    # classif_name = 'Video_Classifier_vad_resnet_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_4.47'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.38'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_4.36'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.55'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.25'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_4.34'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.16'
+    classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.31'
 
 if labels == 'ibm_labels':
     classif_name = 'Video_Classifier_ibm_nodropout_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -74,6 +98,9 @@ classif_data_dir = os.path.join('data', dataset_size, 'models', classif_name + '
 def compute_metrics_utt(args):
     # Separate args
     i, video_file_path, audio_file_path = args[0], args[1], args[2]
+
+    # Extract speaker
+    speaker = audio_file_path.split('/')[3]
 
     # Read target
     h5_file_path = processed_data_dir + audio_file_path
@@ -233,7 +260,7 @@ def compute_metrics_utt(args):
 
     metrics = [accuracy, precision, recall, f1score_s_hat]
 
-    return metrics
+    return metrics, speaker
 
 def main():
 
@@ -241,7 +268,9 @@ def main():
     video_file_paths, audio_file_paths = proc_video_audio_pair_dict(input_video_dir=processed_data_dir,
                                             dataset_type=dataset_type,
                                             labels=labels,
-                                            upsampled=upsampled)
+                                            upsampled=upsampled,
+                                            dct=dct,
+                                            norm_video=norm_video)
 
     # Convert dict to tuples
     args = list(zip(video_file_paths, audio_file_paths))
@@ -250,16 +279,22 @@ def main():
     t1 = time.perf_counter()
 
     # all_metrics = []
+    # all_speakers = []
     # for arg in args:
-    #     metrics = compute_metrics_utt(arg)
+    #     metrics, speaker = compute_metrics_utt(arg)
     #     all_metrics.append(metrics)
+    #     all_speakers.append(speaker)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-        all_metrics = executor.map(compute_metrics_utt, args)
+        # all_metrics = executor.map(compute_metrics_utt, args)
+        all_info = executor.map(compute_metrics_utt, args)
     
     # Retrieve metrics and conditions
     # Transform generator to list
-    all_metrics = list(all_metrics)
+    # all_metrics = list(all_metrics)
+    all_info = list(all_info)
+    all_metrics = [i[0] for i in all_info]
+    all_speakers = [i[1] for i in all_info]
 
     t2 = time.perf_counter()
     print(f'Finished in {t2 - t1} seconds')
@@ -273,7 +308,8 @@ def main():
                   model_data_dir=classif_data_dir,
                   confidence=confidence,
                   all_snr_db=None,
-                  all_noise_types=None)
+                  all_noise_types=None,
+                  all_speakers=all_speakers)
 
 if __name__ == '__main__':
     main()

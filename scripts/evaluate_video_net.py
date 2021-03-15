@@ -9,6 +9,7 @@ import time
 from tqdm import tqdm
 import h5py as h5 # to read .mat files
 import torch.multiprocessing as multiprocessing
+import math
 
 from packages.models.utils import f1_loss
 from packages.processing.stft import stft_pytorch
@@ -24,7 +25,7 @@ if dataset_name == 'ntcd_timit':
 
 # Settings
 dataset_type = 'test'
-# dataset_type = 'train'
+# dataset_type = 'validation'
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
@@ -32,19 +33,27 @@ dataset_size = 'complete'
 # Labels
 labels = 'vad_labels'
 # labels = 'ibm_labels'
-upsampled = True
+upsampled = False
+dct = False
+norm_video = True
 
-# System 
+# System
 cuda = torch.cuda.is_available()
 cuda_device = "cuda:4"
 device = torch.device(cuda_device if cuda else "cpu")
+
+## Video
+visual_frame_rate_i = 30 # initial visual frames per second
+width = 67
+height = 67
+crf = 0 #set the constant rate factor to 0, which is lossless
 
 # Parameters
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
-hop_percent = 0.25 # hop size as a percentage of the window length
+hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
 pad_mode = 'reflect' # This argument is ignored if center = False
@@ -59,28 +68,108 @@ fontsize = 30
 
 ## Classifier
 if labels == 'vad_labels':
-    classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.48'
-    x_dim = 513 
+    # classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.48'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_100/Video_Net_epoch_012_vloss_4.53'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =False
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_dct_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.76'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # # classif_name = 'Video_Classifier_vad_dct_align_shuffle_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.24'
+    # classif_name = 'Video_Classifier_vad_pixel_lstm_512_nopretrain_normimage_batch64_noseqlength_end_epoch_100/'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # # lstm_hidden_size = 1024
+    # lstm_hidden_size = 512
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_full_dct_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_5.52'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_full_dct_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_5.47'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =False
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.48'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_resnet_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_4.47'
+    # x_dim = 513
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.38'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_4.36'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.55'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.25'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_4.34'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.16'
+    classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.31'
+    x_dim = 513
     y_dim = 1
     lstm_layers = 2
-    lstm_hidden_size = 1024 
+    lstm_hidden_size = 1024
     batch_norm=False
     std_norm =True
     eps = 1e-8
 
 if labels == 'ibm_labels':
-    classif_name = 'Video_Classifier_ibm_nodropout_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    x_dim = 513 
+    classif_name = 'Video_Classifier_ibm_nodropout_normdataset_batch64_noseqlength_end_epoch_100/'
+    x_dim = 513
     y_dim = 513
     lstm_layers = 2
-    lstm_hidden_size = 1024 
+    lstm_hidden_size = 1024
     batch_norm=False
     std_norm =True
     eps = 1e-8
 
 # GPU Multiprocessing
 # nb_devices = torch.cuda.device_count()
-nb_devices = 3
+nb_devices = 4
 nb_process_per_device = 1
 
 # Data directories
@@ -105,10 +194,6 @@ def process_utt(classifier, mean, std, video_file_path, audio_file_path, device)
     with h5.File(h5_file_path, 'r') as file:
         x = np.array(file["X"][:])
         x = torch.Tensor(x)
-
-    # Reduce frames of audio
-    if y.shape[-1] < x.shape[-1]:
-        x = x[...,:y.shape[-1]]
 
     # Set to device
     x = x.to(device)
@@ -144,27 +229,30 @@ def process_utt(classifier, mean, std, video_file_path, audio_file_path, device)
 def process_sublist(device, sublist, classifier):
 
     if cuda: classifier = classifier.to(device)
-    
+
     classifier.eval()
     for param in classifier.parameters():
         param.requires_grad = False
 
     # Data normalization
-    if std_norm:        
-        output_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
-        
-        with h5.File(output_h5_dir, 'r') as file:
-            mean = file['X_train_mean'][:]
-            std = file['X_train_std'][:]
+    # output_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+    # output_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'dct' + '_statistics.h5')
+    # output_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel_dct' + '_statistics.h5')
+    # output_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_statistics.h5')
+    output_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
 
-        mean = torch.tensor(mean).to(device)
-        std = torch.tensor(std).to(device)
-    
+    with h5.File(output_h5_dir, 'r') as file:
+        mean = file['X_train_mean'][:]
+        std = file['X_train_std'][:]
+
+    mean = torch.tensor(mean).to(device)
+    std = torch.tensor(std).to(device)
+
     for (video_file_path, audio_file_path) in sublist:
         process_utt(classifier, mean, std, video_file_path, audio_file_path, device)
 
 def main():
-    file = open('output.log','w') 
+    file = open('output.log','w')
 
     print('Torch version: {}'.format(torch.__version__))
     print('Device: %s' % (device))
@@ -185,13 +273,15 @@ def main():
     video_file_paths, audio_file_paths = proc_video_audio_pair_dict(input_video_dir=processed_data_dir,
                                             dataset_type=dataset_type,
                                             labels=labels,
-                                            upsampled=upsampled)
+                                            upsampled=upsampled,
+                                            dct=dct,
+                                            norm_video=norm_video)
     # Convert dict to tuples
     video_clean_pair_paths = list(zip(video_file_paths, audio_file_paths))
 
     # Split list in nb_devices * nb_processes_per_device
     b = np.array_split(video_clean_pair_paths, nb_devices*nb_process_per_device)
-    
+
     # Assign each list to a process
     b = [(4 + i%nb_devices, sublist, classifier) for i, sublist in enumerate(b)]
 

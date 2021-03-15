@@ -23,7 +23,9 @@ from packages.utils import count_parameters, my_collate, collate_many2many_video
 dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
-upsampled = True
+upsampled = False
+dct = False
+norm_video = True
 
 # Labels
 labels = 'vad_labels'
@@ -53,6 +55,8 @@ if labels == 'ibm_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024 
+# lstm_hidden_size = 512 
+# lstm_hidden_size = 100
 batch_norm=False
 std_norm =True
 eps = 1e-8
@@ -70,7 +74,18 @@ end_epoch = 100
 if labels == 'vad_labels':
     # model_name = 'Video_Classifier_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'Video_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_full_dct_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_full_dct_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_mlp_dct_align_shuffle_nopretrain_nonorm_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet_dropout_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet34_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet_normvideo_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -81,7 +96,11 @@ if labels == 'ibm_labels':
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'dct' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel_dct' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_statistics.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
 
 #####################################################################################################
 
@@ -89,11 +108,15 @@ print('Load data')
 train_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
                                                      dataset_type='train',
                                                      labels=labels,
-                                                     upsampled=upsampled)
+                                                     upsampled=upsampled,
+                                                     dct=dct,
+                                                     norm_video=norm_video)
 valid_dataset = WavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir,
                                                      dataset_type='validation',
                                                      labels=labels,
-                                                     upsampled=upsampled)
+                                                     upsampled=upsampled,
+                                                     dct=dct,
+                                                     norm_video=norm_video)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, sampler=None, 
                         batch_sampler=None, num_workers=num_workers, pin_memory=pin_memory, 

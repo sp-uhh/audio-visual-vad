@@ -17,6 +17,7 @@ class DeepVAD_video(nn.Module):
         # resnet = models.resnet18(pretrained=True) # set num_ftrs = 512
         resnet = models.resnet18(pretrained=False) # set num_ftrs = 512
         # resnet = models.resnet34(pretrained=True) # set num_ftrs = 512
+        # resnet = models.resnet34(pretrained=False) # set num_ftrs = 512
 
         num_ftrs = 512
         # num_ftrs = 13467
@@ -34,6 +35,8 @@ class DeepVAD_video(nn.Module):
         # Normalize input data the same way ResNet was pretrained
         self.mean = torch.as_tensor([0.485, 0.456, 0.406])
         self.std = torch.as_tensor([0.229, 0.224, 0.225])
+
+        # self.mlp = nn.Linear(4489, 512)
 
         self.lstm_video = nn.LSTM(input_size=self.lstm_input_size,
                             hidden_size=self.lstm_hidden_size,
@@ -73,6 +76,9 @@ class DeepVAD_video(nn.Module):
         # x = self.dropout(x)
         # Reshape to (batch , seq_len, Features)
         x = x.view(batch , frames, -1)
+
+        # x = self.mlp(x)
+        # x = torch.tanh(x)
 
         # Pack the feature vector
         # input_dim must be (batch, seq_len, Features)

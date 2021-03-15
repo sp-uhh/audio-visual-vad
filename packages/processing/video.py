@@ -6,8 +6,12 @@ def preprocess_ntcd_matlab(matlab_frames, frame, width, height, y_hat_hard=None,
     data_frame = matlab_frames[frame]  # data frame will be shortened to "df" below
     reshaped_df = data_frame.reshape(width, height)
     idct_df = idct(idct(reshaped_df).T).T
-    # normalized_df = idct_df / (matlab_frames.flatten().max() + 1e-8) * 255.0
-    normalized_df = cv2.normalize(idct_df, None, 255, 0, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+    A = idct(idct(matlab_frames.reshape(-1, width, height)))
+    # normalized_df = idct_df / (matlab_frames.max()) * 255.0
+    #TODO: take the largest max - min differences among the frames
+    #TODO: divide by idct
+    normalized_df = (idct_df - A.min()) / (A.max(axis=-1) - A.min(axis=-1)).max() * 255.0
+    # normalized_df = cv2.normalize(idct_df, None, 255, 0, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
     rotated_df = np.rot90(normalized_df, 3)
 
     # Add label on the video

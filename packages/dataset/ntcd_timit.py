@@ -54,6 +54,47 @@ def video_list(input_video_dir,
 
     return file_paths
 
+def kaldi_list(input_video_dir,
+                dataset_type='train',
+                labels='vad_labels',
+                upsampled=False):
+    """
+    Create clean speech + clean speech VAD
+
+    Args:
+        dataset_type (str, optional): [description]. Defaults to 'training'.
+
+    Raises:
+        ValueError: [description]
+
+    Return:
+        Audio_files (list)
+    """
+    
+    data_dir = input_video_dir + 'ntcd_timit/kaldi_fMLLR/'
+
+    ### Training data
+    if dataset_type == 'train':
+        data_dir += 'train/'
+
+    ### Validation data
+    if dataset_type == 'validation':
+        data_dir += 'dev/'
+
+    ### Test data
+    if dataset_type == 'test':
+        data_dir += 'test/'
+
+    # List of files
+    ark_paths = sorted(glob(data_dir + '**/*.ark',recursive=True))
+    scp_paths = sorted(glob(data_dir + '**/*.scp',recursive=True))
+
+    # Remove input_video_dir from file_paths
+    ark_paths = [os.path.relpath(path, input_video_dir) for path in ark_paths]
+    scp_paths = [os.path.relpath(path, input_video_dir) for path in scp_paths]
+
+    return ark_paths, scp_paths
+
 def speech_list(input_speech_dir,
                 dataset_type='train'):
     """
@@ -108,7 +149,9 @@ def speech_list(input_speech_dir,
 def proc_video_audio_pair_dict(input_video_dir,
                 dataset_type='train',
                 labels='vad_labels',
-                upsampled=False):
+                upsampled=False,
+                dct=False,
+                norm_video=False):
     
     video_dir = input_video_dir + 'ntcd_timit/matlab_raw/'
     audio_dir = input_video_dir + 'ntcd_timit/Clean/'
@@ -131,8 +174,13 @@ def proc_video_audio_pair_dict(input_video_dir,
     # List of files
     if upsampled:
         video_file_paths = sorted(glob(video_dir + '**/*' + '_upsampled' + '.h5',recursive=True))
+    if dct:
+        video_file_paths = sorted(glob(video_dir + '**/*' + '_dct' + '.h5',recursive=True))
+    if norm_video:
+        video_file_paths = sorted(glob(video_dir + '**/*' + '_normvideo' + '.h5',recursive=True))
     else:
-        video_file_paths = sorted(glob(video_dir + '**/*' + '.h5',recursive=True))
+        video_file_paths = sorted(glob(video_dir + '**/*' + '[!dct][!upsampled][!normvideo].h5',recursive=True))
+        # video_file_paths = [i for i in video_file_paths if not any(x in i for x in ['upsampled', 'dct'])]
 
     audio_file_paths = sorted(glob(audio_dir + '**/*' + '_' + labels + '.h5',recursive=True))
     

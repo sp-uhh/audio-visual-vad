@@ -29,6 +29,7 @@ class DeepVAD_AV(nn.Module):
             *list(resnet.children())[:-1]# drop the last FC layer
         )
 
+        # self.bn = torch.nn.BatchNorm1d(self.num_video_ftrs, eps=1e-5, momentum=0.1, affine=True)
         self.bn = torch.nn.BatchNorm1d(self.num_video_ftrs, eps=self.eps, momentum=0.1, affine=True)
         
         #audio related init
@@ -109,9 +110,9 @@ class DeepVAD_AV(nn.Module):
             #TODO: modify
             y = self.mcb(audio, video)
             # signed square root
-            # y =  torch.mul(torch.sign(x), torch.sqrt(torch.abs(x) + 1e-12)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
-            # y =  torch.mul(torch.sign(y), torch.sqrt(torch.abs(y) + self.eps)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
-            y =  torch.sqrt(F.relu(y)) - torch.sqrt(F.relu(-y))
+            # y =  torch.mul(torch.sign(y), torch.sqrt(torch.abs(y) + 1e-12)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
+            y =  torch.mul(torch.sign(y), torch.sqrt(torch.abs(y) + self.eps)) # or y = torch.sqrt(F.relu(x)) - torch.sqrt(F.relu(-x))
+            # y =  torch.sqrt(F.relu(y)) - torch.sqrt(F.relu(-y))
             # L2 normalization
             y = y / torch.norm(y, p=2).detach()
 

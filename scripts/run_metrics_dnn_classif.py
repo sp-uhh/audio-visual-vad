@@ -74,7 +74,9 @@ confidence = 0.95 # confidence interval
 
 ## Classifier
 if labels == 'vad_labels':
-    classif_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_009_vloss_16.64'
+    # classif_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_009_vloss_16.64'
+    # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_3.85'
+    classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.96'
 
 if labels == 'ibm_labels':
     classif_name = 'Audio_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_9.22'

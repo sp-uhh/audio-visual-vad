@@ -114,8 +114,8 @@ def process_video(args):
     # video_filename = os.path.splitext(video_filename)[0] + '_skvideo.mp4'
     video_filename = os.path.splitext(video_filename)[0] + '_skvideo_upsampled_2.mp4'
     
-    if not os.path.exists(os.path.dirname(video_filename)):
-        os.makedirs(os.path.dirname(video_filename))
+    
+    os.makedirs(os.path.dirname(video_filename), exist_ok=True)
     
     out = skvideo.io.FFmpegWriter(video_filename,
                 inputdict={'-r': str(visual_frame_rate_i),

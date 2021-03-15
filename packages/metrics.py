@@ -64,7 +64,8 @@ def compute_stats(metrics_keys,
                   model_data_dir,
                   confidence,
                   all_snr_db=None,
-                  all_noise_types=None):
+                  all_noise_types=None,
+                  all_speakers=None):
 
     # Dictionary with all metrics
     metrics = {}
@@ -110,6 +111,20 @@ def compute_stats(metrics_keys,
             print ("{:<10} {:<10} {:<10}".format('METRIC', 'AVERAGE', 'CONF. INT.')) 
             for key, metric in metrics.items():
                 subset_metric = [i for i, x in zip(metric, all_noise_types) if x == noise_type]
+                m, h = mean_confidence_interval(subset_metric, confidence=confidence)
+                stats[key] = {'avg': m, '+/-': h}
+                print ("{:<10} {:<10} {:<10}".format(key, m, h))
+            print('\n')
+
+    if all_speakers is not None:
+        for speaker in set(all_speakers):
+            stats = {}
+
+            print('Speaker = {}'.format(speaker))
+            # Print the names of the columns. 
+            print ("{:<10} {:<10} {:<10}".format('METRIC', 'AVERAGE', 'CONF. INT.')) 
+            for key, metric in metrics.items():
+                subset_metric = [i for i, x in zip(metric, all_speakers) if x == speaker]
                 m, h = mean_confidence_interval(subset_metric, confidence=confidence)
                 stats[key] = {'avg': m, '+/-': h}
                 print ("{:<10} {:<10} {:<10}".format(key, m, h))
