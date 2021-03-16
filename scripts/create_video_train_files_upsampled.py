@@ -27,8 +27,8 @@ if dataset_name == 'ntcd_timit':
     from packages.dataset.ntcd_timit import video_list, kaldi_list, speech_list
 
 ## Dataset
-dataset_types = ['train', 'validation']
-# dataset_types = ['test']
+# dataset_types = ['train', 'validation']
+dataset_types = ['test']
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
@@ -37,29 +37,29 @@ dataset_size = 'complete'
 labels = 'vad_labels'
 # labels = 'ibm_labels'
 
-## Video
-visual_frame_rate_i = 30 # initial visual frames per second
-width = 67
-height = 67
-crf = 0 #set the constant rate factor to 0, which is lossless
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
+# width = 67
+# height = 67
+# crf = 0 #set the constant rate factor to 0, which is lossless
 
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
-# hop_percent = 0.25 # hop size as a percentage of the window length
+# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
+hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
 pad_mode = 'reflect' # This argument is ignored if center = False
 pad_at_end = True # pad audio file at end to match same size after stft + istft
 dtype = 'complex64'
 
-# ## Video
-# visual_frame_rate_i = 30 # initial visual frames per second
-# visual_frame_rate_o = 1 / (wlen_sec * hop_percent)
-# width = 67
-# height = 67
-# crf = 0 #set the constant rate factor to 0, which is lossless
+## Video
+visual_frame_rate_i = 30 # initial visual frames per second
+visual_frame_rate_o = 1 / (wlen_sec * hop_percent)
+width = 67
+height = 67
+crf = 0 #set the constant rate factor to 0, which is lossless
 
 ## Noise robust VAD
 vad_threshold = 1.70
@@ -119,8 +119,8 @@ def process_write_video(args):
         out = skvideo.io.FFmpegWriter(tmp.name,
                     inputdict={'-r': str(visual_frame_rate_i),
                             '-s':'{}x{}'.format(width,height)},
-                    # outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
-                    outputdict={'-r': str(visual_frame_rate_i),
+                    outputdict={'-filter:v': 'fps=fps={}'.format(visual_frame_rate_o),
+                    # outputdict={'-r': str(visual_frame_rate_i),
                                 '-c:v': 'libx264',
                                 '-crf': str(crf),
                                 '-preset': 'veryslow'}
@@ -239,10 +239,10 @@ def process_write_video(args):
 
     # Store data in h5_file
     output_h5_file = output_video_dir + mat_file_path
-    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
     # output_h5_file = os.path.splitext(output_h5_file)[0] + '_dct.h5'
     # output_h5_file = os.path.splitext(output_h5_file)[0] + '_.h5'
-    output_h5_file = os.path.splitext(output_h5_file)[0] + '_normvideo.h5'
+    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_normvideo.h5'
 
     if not os.path.exists(os.path.dirname(output_h5_file)):
         os.makedirs(os.path.dirname(output_h5_file))
@@ -364,7 +364,8 @@ def main():
             # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel_dct' + '_statistics.h5')
             # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'dct' + '_statistics.h5')
             # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_statistics.h5')
-            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
+            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'upsampled' + '_statistics.h5')
             if not os.path.exists(os.path.dirname(output_dataset_file)):
                 os.makedirs(os.path.dirname(output_dataset_file))
 

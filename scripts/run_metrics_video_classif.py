@@ -35,9 +35,9 @@ dataset_type = 'test'
 # Labels
 labels = 'vad_labels'
 # labels = 'ibm_labels'
-upsampled = False
+upsampled = True
 dct = False
-norm_video = True
+norm_video = False
 
 ## Video
 visual_frame_rate_i = 30 # initial visual frames per second
@@ -84,7 +84,10 @@ if labels == 'vad_labels':
     # classif_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.25'
     # classif_name = 'Video_Classifier_vad_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_4.34'
     # classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_4.16'
-    classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.31'
+    # classif_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_4.31'
+    # classif_name = 'Video_Classifier_vad_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_005_vloss_4.38'
+    # classif_name = 'Video_Classifier_vad_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_009_vloss_4.15'
+    classif_name = 'Video_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.51'
 
 if labels == 'ibm_labels':
     classif_name = 'Video_Classifier_ibm_nodropout_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)

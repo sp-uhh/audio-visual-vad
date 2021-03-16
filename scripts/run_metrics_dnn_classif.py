@@ -76,7 +76,9 @@ confidence = 0.95 # confidence interval
 if labels == 'vad_labels':
     # classif_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_009_vloss_16.64'
     # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_3.85'
-    classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.96'
+    # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.96'
+    # classif_name = 'AV_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.52'
+    classif_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_3.89'
 
 if labels == 'ibm_labels':
     classif_name = 'Audio_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_9.22'
@@ -94,6 +96,7 @@ def compute_metrics_utt(args):
     # Extract input SNR and noise type
     snr_db = int(proc_noisy_file_path.split('/')[3])
     noise_type = proc_noisy_file_path.split('/')[2]
+    speaker = proc_noisy_file_path.split('/')[5]
 
     # Read target
     h5_file_path = processed_data_dir + clean_file_path
@@ -274,7 +277,7 @@ def compute_metrics_utt(args):
 
     metrics = [accuracy, precision, recall, f1score_s_hat]
 
-    return metrics, snr_db, noise_type
+    return metrics, snr_db, noise_type, speaker
 
 def main():
 
@@ -293,11 +296,13 @@ def main():
     # all_metrics = []
     # all_snr_db = []
     # all_noise_types = []
+    # all_speakers = []
     # for arg in args:
-    #     metrics, snr_db, noise_type = compute_metrics_utt(arg)
+    #     metrics, snr_db, noise_type, speaker = compute_metrics_utt(arg)
     #     all_metrics.append(metrics)
     #     all_snr_db.append(snr_db)
     #     all_noise_types.append(noise_type)
+    #     all_speakers.append(speaker)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
         all_results = executor.map(compute_metrics_utt, args)
@@ -308,6 +313,7 @@ def main():
     all_metrics = [i[0] for i in all_results]
     all_snr_db = [i[1] for i in all_results]
     all_noise_types = [i[2] for i in all_results]
+    all_speakers = [i[3] for i in all_results]
 
     t2 = time.perf_counter()
     print(f'Finished in {t2 - t1} seconds')
@@ -321,7 +327,8 @@ def main():
                   model_data_dir=classif_data_dir,
                   confidence=confidence,
                   all_snr_db=all_snr_db,
-                  all_noise_types=all_noise_types)
+                  all_noise_types=all_noise_types,
+                  all_speakers=all_speakers)
 
 if __name__ == '__main__':
     main()

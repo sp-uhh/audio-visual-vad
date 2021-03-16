@@ -60,14 +60,14 @@ if labels == 'ibm_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024
-use_mcb=True
+use_mcb=False
 batch_norm=False
 std_norm =True
 eps = 1e-8
 
 # Training
-batch_size = 32
-# batch_size = 16
+# batch_size = 32
+batch_size = 16
 # batch_size = 2
 learning_rate = 1e-4
 # weight_decay = 1e-4
@@ -85,8 +85,13 @@ if labels == 'vad_labels':
     # model_name = 'AV_Classifier_vad_mcb_1024_ssr_relu_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_512_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_512_ssr_relu_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'AV_Classifier_vad_mcb_512_initial_eps_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_512_initial_eps_nopretrain_normdataset_batch32_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_256_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_batchnorm_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_vad_batchnorm_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     # model_name = 'AV_Classifier_mcb_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -97,7 +102,8 @@ if labels == 'ibm_labels':
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
 audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+# video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'upsampled' + '_statistics.h5')
 
 #####################################################################################################
 
@@ -152,8 +158,8 @@ def main():
 
     if cuda: model = model.to(device)
 
-    nfft = int(wlen_sec * fs) # STFT window length in samples
-    window = torch.hann_window(window_length=nfft).to(device)
+    # nfft = int(wlen_sec * fs) # STFT window length in samples
+    # window = torch.hann_window(window_length=nfft).to(device)
 
     # Create model folder
     model_dir = os.path.join('models', model_name)

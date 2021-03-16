@@ -174,9 +174,9 @@ def proc_video_audio_pair_dict(input_video_dir,
     # List of files
     if upsampled:
         video_file_paths = sorted(glob(video_dir + '**/*' + '_upsampled' + '.h5',recursive=True))
-    if dct:
+    elif dct:
         video_file_paths = sorted(glob(video_dir + '**/*' + '_dct' + '.h5',recursive=True))
-    if norm_video:
+    elif norm_video:
         video_file_paths = sorted(glob(video_dir + '**/*' + '_normvideo' + '.h5',recursive=True))
     else:
         video_file_paths = sorted(glob(video_dir + '**/*' + '[!dct][!upsampled][!normvideo].h5',recursive=True))

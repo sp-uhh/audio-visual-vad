@@ -58,8 +58,28 @@ fontsize = 30
 
 ## Classifier
 if labels == 'vad_labels':
-    # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_3.85'
-    classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.96'
+    # # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_3.85'
+    # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.96'
+    # x_dim = 513 
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024 
+    # use_mcb=True
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'AV_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.52'
+    # x_dim = 513 
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024 
+    # use_mcb=False
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    classif_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_3.89'
     x_dim = 513 
     y_dim = 1
     lstm_layers = 2
@@ -202,7 +222,8 @@ def process_sublist(device, sublist, classifier):
     if std_norm:
         # Load mean and variance        
         audio_h5_dir = processed_data_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-        video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+        # video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
+        video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'upsampled' + '_statistics.h5')
         
         # Audio
         with h5.File(audio_h5_dir, 'r') as file:

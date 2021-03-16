@@ -23,9 +23,9 @@ from packages.utils import count_parameters, my_collate, collate_many2many_video
 dataset_size = 'complete'
 
 dataset_name = 'ntcd_timit'
-upsampled = False
+upsampled = True
 dct = False
-norm_video = True
+norm_video = False
 
 # Labels
 labels = 'vad_labels'
@@ -85,7 +85,9 @@ if labels == 'vad_labels':
     # model_name = 'Video_Classifier_vad_resnet_normvideo_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'Video_Classifier_vad_resnet_normvideo2_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'Video_Classifier_vad_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -100,7 +102,8 @@ input_video_dir = os.path.join('data', dataset_size, 'processed/')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'dct' + '_statistics.h5')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel_dct' + '_statistics.h5')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_statistics.h5')
-output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'upsampled' + '_statistics.h5')
 
 #####################################################################################################
 
