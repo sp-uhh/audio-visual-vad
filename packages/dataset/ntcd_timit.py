@@ -384,7 +384,8 @@ def noisy_clean_pair_dict(input_speech_dir,
 def proc_noisy_clean_pair_dict(input_speech_dir,
                 dataset_type='train',
                 dataset_size='complete',
-                labels='vad_labels'):
+                labels='vad_labels',
+                upsampled=False):
     """
     Create clean speech + clean speech VAD
 
@@ -398,7 +399,6 @@ def proc_noisy_clean_pair_dict(input_speech_dir,
         Audio_files (list)
     """
 
-    # Clean dir
     clean_file_dir = input_speech_dir + 'ntcd_timit/Clean/'
 
     ### Training data
@@ -414,7 +414,10 @@ def proc_noisy_clean_pair_dict(input_speech_dir,
         clean_file_dir += 'test/'
 
     # List of files
-    clean_file_paths = sorted(glob(clean_file_dir + '**/*' + '_' + labels + '.h5',recursive=True))
+    if upsampled:
+        clean_file_paths = sorted(glob(clean_file_dir + '**/*' + labels + '_upsampled' + '.h5',recursive=True))
+    else:
+        clean_file_paths = sorted(glob(clean_file_dir + '**/*' + labels + '.h5',recursive=True))
 
     # Get shortpaths
     file_shortpaths = []
@@ -422,7 +425,10 @@ def proc_noisy_clean_pair_dict(input_speech_dir,
         p = pathlib.Path(clean_file_path)
         p = str(pathlib.Path(*p.parts[-3:]))
         p = os.path.splitext(p)[0] # Remove extension
-        p = p.replace('_' + labels, '')
+        if upsampled:
+            p = p.replace('_' + labels + '_upsampled', '')
+        else:    
+            p = p.replace('_' + labels, '')
         p = p + '.wav'
         file_shortpaths.append(p)
 

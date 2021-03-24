@@ -87,7 +87,8 @@ if labels == 'vad_labels':
     # model_name = 'Video_Classifier_vad_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'Video_Classifier_vad_resnet_normvideo4_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'Video_Classifier_vad_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'Video_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Video_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'Video_Classifier_vad_3CNN_upsampled_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
     # model_name = 'Video_Classifier_ibm_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)

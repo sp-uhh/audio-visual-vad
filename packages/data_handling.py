@@ -231,7 +231,7 @@ class WavWholeSequenceSpectrogramLabeledFrames(Dataset):
 class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
     def __init__(self,
                  input_video_dir, dataset_type,
-                 dataset_size, labels='vad_labels',
+                 dataset_size, labels='vad_labels', upsampled=False,
                  fs=16000, wlen_sec=64e-3, win='hann', hop_percent=0.25,
                  center=True, pad_mode='reflect', pad_at_end=True, eps=1e-8):
         # Do not load hdf5 in __init__ if num_workers > 0
@@ -239,6 +239,7 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         self.dataset_type = dataset_type
         self.dataset_size = dataset_size        
         self.labels = labels
+        self.upsampled = upsampled
 
         # STFT parameters
         self.fs = fs
@@ -254,12 +255,13 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
                                                 dataset_type=dataset_type,
                                                 dataset_size=dataset_size,
-                                                labels=labels)
+                                                labels=labels,
+                                                upsampled=upsampled)
 
         # Convert dict to tuples
         self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
 
-        #TODO: correct audio / target alignment (paths not matching)
+        # # TODO: correct audio / target alignment (paths not matching)
         # input_clean_file_paths, \
         #     output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
         #                         dataset_type=dataset_type)
@@ -301,6 +303,7 @@ class NoisyWavWholeSequenceSpectrogramLabeledFrames(Dataset):
         # Read label
         output_h5_file = self.input_video_dir + clean_file_path
         # output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '.h5'
+        # output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '_upsampled.h5'
 
         with h5.File(output_h5_file, 'r') as file:
             label = np.array(file["Y"][:])
@@ -384,7 +387,7 @@ class NoisyWavWholeSequenceWavLabeledFrames(Dataset):
 class AudioVisualSequenceLabeledFrames(Dataset):
     def __init__(self,
                  input_video_dir, dataset_type,
-                 dataset_size, labels='vad_labels',
+                 dataset_size, labels='vad_labels', upsampled=False,
                  fs=16000, wlen_sec=64e-3, win='hann', hop_percent=0.25,
                  center=True, pad_mode='reflect', pad_at_end=True, eps=1e-8):
         # Do not load hdf5 in __init__ if num_workers > 0
@@ -392,6 +395,7 @@ class AudioVisualSequenceLabeledFrames(Dataset):
         self.dataset_type = dataset_type
         self.dataset_size = dataset_size        
         self.labels = labels
+        self.upsampled = upsampled
 
         # STFT parameters
         self.fs = fs
@@ -407,10 +411,20 @@ class AudioVisualSequenceLabeledFrames(Dataset):
         self.noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=input_video_dir,
                                                                  dataset_type=dataset_type,
                                                                  dataset_size=dataset_size,
-                                                                 labels=labels)
+                                                                 labels=labels,
+                                                                 upsampled=upsampled)
 
         # Convert dict to tuples
         self.noisy_clean_pair_paths = list(self.noisy_clean_pair_paths.items())
+
+        # # # TODO: correct audio / target alignment (paths not matching)
+        # input_clean_file_paths, \
+        #     output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
+        #                         dataset_type=dataset_type)
+
+        # self.noisy_clean_pair_paths = [(input_clean_file_path, output_clean_file_path)
+        #                 for input_clean_file_path, output_clean_file_path\
+        #                     in zip(input_clean_file_paths, output_clean_file_paths)]
 
         self.dataset_len = len(self.noisy_clean_pair_paths) # total number of utterances
 
@@ -445,7 +459,10 @@ class AudioVisualSequenceLabeledFrames(Dataset):
         # Read video
         output_h5_file = clean_file_path.replace('Clean', 'matlab_raw')
         output_h5_file = output_h5_file.replace('_' + self.labels, '')
-        output_h5_file = os.path.splitext(output_h5_file)[0] + '_upsampled.h5'
+        if self.upsampled:
+            output_h5_file = os.path.splitext(output_h5_file)[0] + '.h5'
+        else:
+            output_h5_file = os.path.splitext(output_h5_file)[0] + '_normvideo.h5'
         output_h5_file = self.input_video_dir + output_h5_file
 
         # Open HDF5 file
@@ -455,6 +472,8 @@ class AudioVisualSequenceLabeledFrames(Dataset):
 
         # Read label
         output_h5_file = self.input_video_dir + clean_file_path
+        # output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '.h5'
+        # output_h5_file = self.input_video_dir + os.path.splitext(clean_file_path)[0] + '_' + self.labels + '_upsampled.h5'
 
         with h5.File(output_h5_file, 'r') as file:
             label = np.array(file["Y"][:])

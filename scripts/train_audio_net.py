@@ -8,6 +8,7 @@ import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
 import h5py as h5
+import math
 
 from torch.utils.data import DataLoader
 # from video_net import VideoClassifier
@@ -22,6 +23,7 @@ from packages.processing.stft import stft_pytorch
 # Dataset
 # dataset_size = 'subset'
 dataset_size = 'complete'
+upsampled = True
 
 dataset_name = 'ntcd_timit'
 
@@ -29,9 +31,13 @@ dataset_name = 'ntcd_timit'
 labels = 'vad_labels'
 # labels = 'ibm_labels'
 
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
+
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
+# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
 hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
@@ -67,7 +73,8 @@ std_norm =True
 eps = 1e-8
 
 # Training
-batch_size = 64
+# batch_size = 64
+batch_size = 16
 # batch_size = 2
 learning_rate = 1e-4
 # weight_decay = 1e-4
@@ -78,6 +85,8 @@ end_epoch = 100
 
 if labels == 'vad_labels':
     # model_name = 'Audio_Classifier_vad_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Audio_Classifier_vad_cleanspeech_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'Audio_Classifier_vad_cleanspeech_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     model_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
 
 if labels == 'ibm_labels':
@@ -85,18 +94,21 @@ if labels == 'ibm_labels':
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
 # output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec' + '_statistics.h5')
+# output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
+output_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
 
 #####################################################################################################
 
 print('Load data')
 train_dataset = NoisyWavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
-                                                              dataset_size=dataset_size, labels=labels,
+                                                              dataset_size=dataset_size, labels=labels, upsampled=upsampled,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
 valid_dataset = NoisyWavWholeSequenceSpectrogramLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
-                                                              dataset_size=dataset_size, labels=labels,
+                                                              dataset_size=dataset_size, labels=labels, upsampled=upsampled,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)                                                              
 

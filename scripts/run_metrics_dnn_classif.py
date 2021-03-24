@@ -13,6 +13,7 @@ import ffmpeg
 import skvideo.io
 import cv2
 import h5py as h5
+import math
 
 from packages.metrics import energy_ratios, compute_stats
 
@@ -22,24 +23,28 @@ from packages.models.utils import f1_loss
 
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
-    from packages.dataset.ntcd_timit import proc_noisy_clean_pair_dict
+    from packages.dataset.ntcd_timit import proc_noisy_clean_pair_dict, speech_list
 
 # Dataset
 # dataset_size = 'subset'
 dataset_size = 'complete'
 
 dataset_type = 'test'
+# dataset_type = 'validation'
 
 # Labels
 labels = 'vad_labels'
 # labels = 'ibm_labels'
 upsampled = True
 
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
+
 # Parameters
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
 hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
@@ -78,7 +83,12 @@ if labels == 'vad_labels':
     # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_002_vloss_3.85'
     # classif_name = 'AV_Classifier_vad_mcb_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.96'
     # classif_name = 'AV_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_4.52'
-    classif_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_3.89'
+    # classif_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_3.89'
+    # classif_name = 'AV_Classifier_vad_cleanspeech_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_1.15'
+    # classif_name = 'Audio_Classifier_vad_cleanspeech_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_1.13'
+    # classif_name = 'AV_Classifier_vad_frozenResNet_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_3.72'
+    # classif_name = 'Audio_Classifier_vad_loss_eps_upsampled_align_shuffle_nopretrain_normdataset_batch64_noseqlength_end_epoch_100/Video_Net_epoch_008_vloss_4.07'
+    classif_name = 'AV_Classifier_vad_frozenResNet_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_005_vloss_3.85'
 
 if labels == 'ibm_labels':
     classif_name = 'Audio_Classifier_ibm_normdataset_batch16_noseqlength_end_epoch_100/Video_Net_epoch_006_vloss_9.22'
@@ -98,8 +108,13 @@ def compute_metrics_utt(args):
     noise_type = proc_noisy_file_path.split('/')[2]
     speaker = proc_noisy_file_path.split('/')[5]
 
+    # snr_db = 100
+    # noise_type = 'None'
+    # speaker = proc_noisy_file_path.split('/')[3]
+
     # Read target
     h5_file_path = processed_data_dir + clean_file_path
+    # h5_file_path = processed_data_dir + os.path.splitext(clean_file_path)[0] + '_' + labels + '.h5'
 
     with h5.File(h5_file_path, 'r') as file:
         y = np.array(file["Y"][:])
@@ -107,6 +122,7 @@ def compute_metrics_utt(args):
     
     # Output file
     output_path = classif_data_dir + proc_noisy_file_path
+    # output_path = classif_data_dir + clean_file_path
     output_path = os.path.splitext(output_path)[0]
 
     # Load y_hat_hard / y_hat_soft
@@ -128,12 +144,15 @@ def compute_metrics_utt(args):
     # Clean wav path
     clean_wav_path = os.path.splitext(clean_file_path)[0]
     clean_wav_path = clean_wav_path.replace('_' + labels, '')
+    if upsampled:
+        clean_wav_path = clean_wav_path.replace('_upsampled', '')
     clean_wav_path = clean_wav_path + '.wav'
 
     # Read files
     s_t, fs_s = torchaudio.load(processed_data_dir + clean_wav_path)
     s_t = s_t[0] # 1channel
     x_t, fs_x = torchaudio.load(processed_data_dir + proc_noisy_file_path)
+    # x_t, fs_x = torchaudio.load(processed_data_dir + clean_file_path)
     x_t = x_t[0] # 1channel
 
     # x = x/np.max(x)
@@ -207,6 +226,7 @@ def compute_metrics_utt(args):
 
     # Save figure
     output_path = classif_data_dir + proc_noisy_file_path
+    # output_path = classif_data_dir + clean_file_path
     output_path = os.path.splitext(output_path)[0]
 
     fig.savefig(output_path + '_hard_mask.png')
@@ -285,10 +305,24 @@ def main():
     noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=processed_data_dir,
                                             dataset_type=dataset_type,
                                             dataset_size=dataset_size,
-                                            labels=labels)
+                                            labels=labels,
+                                            upsampled=upsampled)
 
     # Convert dict to tuples
     args = list(noisy_clean_pair_paths.items())
+
+    # # # TODO: correct audio / target alignment (paths not matching)
+    # input_clean_file_paths, \
+    #     output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
+    #                         dataset_type=dataset_type)
+
+    # noisy_clean_pair_paths = [(input_clean_file_path, output_clean_file_path)
+    #                 for input_clean_file_path, output_clean_file_path\
+    #                     in zip(input_clean_file_paths, output_clean_file_paths)]
+
+    # # Convert dict to tuples
+    # args = noisy_clean_pair_paths
+    
     args = [[i, j[0], j[1]] for i,j in enumerate(args)]
 
     t1 = time.perf_counter()
@@ -327,7 +361,9 @@ def main():
                   model_data_dir=classif_data_dir,
                   confidence=confidence,
                   all_snr_db=all_snr_db,
+                #   all_snr_db=None,
                   all_noise_types=all_noise_types,
+                #   all_noise_types=None,
                   all_speakers=all_speakers)
 
 if __name__ == '__main__':

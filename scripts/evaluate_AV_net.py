@@ -9,6 +9,7 @@ import time
 from tqdm import tqdm
 import h5py as h5 # to read .mat files
 import torch.multiprocessing as multiprocessing
+import math
 
 from packages.models.utils import f1_loss
 from packages.processing.stft import stft_pytorch
@@ -20,11 +21,12 @@ from packages.visualization import display_multiple_signals
 # Parameters
 dataset_name = 'ntcd_timit'
 if dataset_name == 'ntcd_timit':
-    from packages.dataset.ntcd_timit import proc_noisy_clean_pair_dict
+    from packages.dataset.ntcd_timit import proc_noisy_clean_pair_dict, speech_list
 
 # Settings
 dataset_type = 'test'
 # dataset_type = 'train'
+upsampled = True
 
 # dataset_size = 'subset'
 dataset_size = 'complete'
@@ -38,11 +40,14 @@ cuda = torch.cuda.is_available()
 cuda_device = "cuda:4"
 device = torch.device(cuda_device if cuda else "cpu")
 
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
+
 # Parameters
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
 hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
@@ -79,7 +84,37 @@ if labels == 'vad_labels':
     # std_norm =True
     # eps = 1e-8
 
-    classif_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_3.89'
+    # classif_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_001_vloss_3.89'
+    # x_dim = 513 
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024 
+    # use_mcb=True
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'AV_Classifier_vad_cleanspeech_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_004_vloss_1.15'
+    # x_dim = 513 
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024 
+    # use_mcb=False
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    # classif_name = 'AV_Classifier_vad_frozenResNet_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_003_vloss_3.72'
+    # x_dim = 513 
+    # y_dim = 1
+    # lstm_layers = 2
+    # lstm_hidden_size = 1024 
+    # use_mcb=False
+    # batch_norm=False
+    # std_norm =True
+    # eps = 1e-8
+
+    classif_name = 'AV_Classifier_vad_frozenResNet_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_005_vloss_3.85'
     x_dim = 513 
     y_dim = 1
     lstm_layers = 2
@@ -116,6 +151,7 @@ def process_utt(classifier, audio_mean, audio_std,
 
     # Read target
     h5_file_path = processed_data_dir + clean_file_path
+    # h5_file_path = processed_data_dir + os.path.splitext(clean_file_path)[0] + '_' + labels + '.h5'
 
     with h5.File(h5_file_path, 'r') as file:
         y = np.array(file["Y"][:])
@@ -124,7 +160,8 @@ def process_utt(classifier, audio_mean, audio_std,
     # Read video
     h5_file_path = clean_file_path.replace('Clean', 'matlab_raw')
     h5_file_path = h5_file_path.replace('_' + labels, '')
-    h5_file_path = os.path.splitext(h5_file_path)[0] + '_upsampled.h5'
+    h5_file_path = os.path.splitext(h5_file_path)[0] + '.h5'
+    # h5_file_path = os.path.splitext(h5_file_path)[0] + '_normvideo.h5'
     h5_file_path = processed_data_dir + h5_file_path
 
     # Open HDF5 file
@@ -149,6 +186,7 @@ def process_utt(classifier, audio_mean, audio_std,
 
     # Read files
     x_t, fs_x = torchaudio.load(processed_data_dir + proc_noisy_file_path)
+    # x_t, fs_x = torchaudio.load(processed_data_dir + clean_file_path)
     x_t = x_t[0] # 1channel
 
     # x = x/np.max(x)
@@ -203,6 +241,7 @@ def process_utt(classifier, audio_mean, audio_std,
 
     # save y_hat_soft / y_hat_hard as .pt
     output_path = classif_data_dir + proc_noisy_file_path
+    # output_path = classif_data_dir + clean_file_path
     output_path = os.path.splitext(output_path)[0]
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -221,9 +260,12 @@ def process_sublist(device, sublist, classifier):
     # Data normalization
     if std_norm:
         # Load mean and variance        
-        audio_h5_dir = processed_data_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+        # audio_h5_dir = processed_data_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+        audio_h5_dir = processed_data_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
+        # audio_h5_dir = processed_data_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec' + '_statistics.h5')
         # video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
-        video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'upsampled' + '_statistics.h5')
+        video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_upsampled' + '_statistics.h5')
+        # video_h5_dir = processed_data_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
         
         # Audio
         with h5.File(audio_h5_dir, 'r') as file:
@@ -268,10 +310,20 @@ def main():
     noisy_clean_pair_paths = proc_noisy_clean_pair_dict(input_speech_dir=processed_data_dir,
                                             dataset_type=dataset_type,
                                             dataset_size=dataset_size,
-                                            labels=labels)
+                                            labels=labels,
+                                            upsampled=upsampled)
 
     # Convert dict to tuples
     noisy_clean_pair_paths = list(noisy_clean_pair_paths.items())
+
+    # # # TODO: correct audio / target alignment (paths not matching)
+    # input_clean_file_paths, \
+    #     output_clean_file_paths = speech_list(input_speech_dir='data/complete/raw/',
+    #                         dataset_type=dataset_type)
+
+    # noisy_clean_pair_paths = [(input_clean_file_path, output_clean_file_path)
+    #                 for input_clean_file_path, output_clean_file_path\
+    #                     in zip(input_clean_file_paths, output_clean_file_paths)]
 
     # Split list in nb_devices * nb_processes_per_device
     b = np.array_split(noisy_clean_pair_paths, nb_devices*nb_process_per_device)

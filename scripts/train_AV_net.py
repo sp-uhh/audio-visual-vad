@@ -8,11 +8,13 @@ import numpy as np
 import torch.nn as nn
 from tqdm import tqdm
 import h5py as h5
+import math
 
 from torch.utils.data import DataLoader
 
 from packages.data_handling import AudioVisualSequenceLabeledFrames, AudioVisualSequenceWavLabeledFrames
 from packages.models.AV_Net import DeepVAD_AV
+from packages.models.Video_Net import DeepVAD_video
 from packages.models.utils import binary_cross_entropy, f1_loss
 from packages.utils import count_parameters, collate_many2many_AV, collate_many2many_AV_waveform
 from packages.processing.stft import stft_pytorch
@@ -26,10 +28,15 @@ dataset_name = 'ntcd_timit'
 # Labels
 labels = 'vad_labels'
 # labels = 'ibm_labels'
+upsampled = True
+
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
 
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
+# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
 hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
@@ -60,7 +67,7 @@ if labels == 'ibm_labels':
 # h_dim = [128, 128]
 lstm_layers = 2
 lstm_hidden_size = 1024
-use_mcb=False
+use_mcb=True
 batch_norm=False
 std_norm =True
 eps = 1e-8
@@ -91,7 +98,16 @@ if labels == 'vad_labels':
     # model_name = 'AV_Classifier_vad_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
     # model_name = 'AV_Classifier_vad_mcb_batchnorm_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
-    model_name = 'AV_Classifier_vad_batchnorm_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_batchnorm_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_pretrained_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_cleanspeech_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_mcb_cleanspeech_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_cleanspeech_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_frozenResNet_cleanspeech_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    # model_name = 'AV_Classifier_vad_frozenResNet_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+    model_name = 'AV_Classifier_vad_frozenResNet_mcb_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_{:03d}'.format(end_epoch)
+
+    pretrained_model_name = 'Video_Classifier_vad_noeps_upsampled_resnet_normvideo3_nopretrain_normimage_batch64_noseqlength_end_epoch_100/Video_Net_epoch_007_vloss_4.51'
 
 if labels == 'ibm_labels':
     # model_name = 'AV_Classifier_mcb_ibm_normdataset_batch16_noseqlength_end_epoch_{:03d}'.format(end_epoch)
@@ -101,19 +117,24 @@ if labels == 'ibm_labels':
 
 # Data directories
 input_video_dir = os.path.join('data', dataset_size, 'processed/')
-audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+# audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
+# audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec' + '_statistics.h5')
+# audio_h5_dir = input_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
 # video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'pixel' + '_statistics.h5')
 video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'upsampled' + '_statistics.h5')
+# video_h5_dir = input_video_dir + os.path.join(dataset_name, 'matlab_raw', dataset_name + '_' + 'normvideo' + '_statistics.h5')
+pretrained_classif_dir = os.path.join('models', pretrained_model_name + '.pt')
 
 #####################################################################################################
 
 print('Load data')
 train_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='train',
-                                                              dataset_size=dataset_size, labels=labels,
+                                                              dataset_size=dataset_size, labels=labels, upsampled=upsampled,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
 valid_dataset = AudioVisualSequenceLabeledFrames(input_video_dir=input_video_dir, dataset_type='validation',
-                                                              dataset_size=dataset_size, labels=labels,
+                                                              dataset_size=dataset_size, labels=labels, upsampled=upsampled,
                                                               fs=fs, wlen_sec=wlen_sec, win=win, hop_percent=hop_percent,
                                                               center=center, pad_mode=pad_mode, pad_at_end=pad_at_end, eps=eps)
 
@@ -150,6 +171,22 @@ print('- Number of validation batches: {}'.format(len(valid_loader)))
 def main():
     print('Create model')
     model = DeepVAD_AV(lstm_layers, lstm_hidden_size, y_dim, use_mcb, eps)
+    
+    
+    print('Load pretrained model')
+    model_dict = model.state_dict()
+    pretrained_dict = torch.load(pretrained_classif_dir)
+    
+    # 1. Load Resnet and filter out unnecessary keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if 'features' in k}
+
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
+
+    # 3. load the new state dict
+    model.load_state_dict(model_dict)
+
+
 
     if cuda: model = model.to(device)
 
@@ -200,6 +237,12 @@ def main():
     # Optimizer settings
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999))
     # criterion = nn.CrossEntropyLoss().to(device) # Ignore padding in the loss
+
+    print('Freeze ResNet')
+    for name, child in model.module.named_children():
+        if name == 'features':
+            for param in child.parameters():
+                param.requires_grad = False
 
     t = len(train_loader)
     m = len(valid_loader)

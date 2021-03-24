@@ -93,10 +93,10 @@ class DeepVAD_AV(nn.Module):
         # Reshape to (batch , seq_len, Features)
         video = video.view(batch , frames, -1)
         
-        # Batch norm before concatenating
-        video = video.permute(1, 2, 0).contiguous()
-        video = self.bn(video)
-        video = video.permute(2, 0, 1).contiguous()
+        # # Batch norm before concatenating
+        # video = video.permute(1, 2, 0).contiguous()
+        # video = self.bn(video)
+        # video = video.permute(2, 0, 1).contiguous()
         
         # Audio branch
         # audio = self.wavenet_en(audio) # output shape - Batch X Features X seq len

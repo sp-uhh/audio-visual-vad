@@ -19,6 +19,10 @@ class DeepVAD_video(nn.Module):
         # resnet = models.resnet34(pretrained=True) # set num_ftrs = 512
         # resnet = models.resnet34(pretrained=False) # set num_ftrs = 512
 
+        # self.conv1 = nn.Conv2d(3, 64, 5, stride=2)  # input (channel) size is 3, output is 6, and kernel size is 5
+        # self.conv2 = nn.Conv2d(64, 64, 5, stride=2)
+        # self.conv3 = nn.Conv2d(64, 64, 5, stride=2)
+
         num_ftrs = 512
         # num_ftrs = 13467
         # num_ftrs = 4489
@@ -76,6 +80,18 @@ class DeepVAD_video(nn.Module):
         # x = self.dropout(x)
         # Reshape to (batch , seq_len, Features)
         x = x.view(batch , frames, -1)
+
+        # x = self.conv1(x)
+        # x = torch.relu(x)
+
+        # x = self.conv2(x)
+        # x = torch.relu(x)
+
+        # x = self.conv3(x)
+        # x = torch.relu(x) 
+               
+        # # Reshape to (batch , seq_len, Features)
+        # x = x.view(batch , frames, -1)
 
         # x = self.mlp(x)
         # x = torch.tanh(x)

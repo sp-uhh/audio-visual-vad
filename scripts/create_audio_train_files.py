@@ -31,17 +31,20 @@ if dataset_name == 'ntcd_timit':
 # dataset_types = ['train', 'validation']
 dataset_types = ['test']
 
-dataset_size = 'subset'
-# dataset_size = 'complete'
+# dataset_size = 'subset'
+dataset_size = 'complete'
 
 # Labels
 labels = 'vad_labels'
 # labels = 'ibm_labels'
 
+# ## Video
+# visual_frame_rate_i = 30 # initial visual frames per second
+
 ## STFT
 fs = int(16e3) # Sampling rate
 wlen_sec = 64e-3 # window length in seconds
-# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate)) * 1e4) / 1e4  # hop size as a percentage of the window length
+# hop_percent = math.floor((1 / (wlen_sec * visual_frame_rate_i)) * 1e4) / 1e4  # hop size as a percentage of the window length
 hop_percent = 0.25 # hop size as a percentage of the window length
 win = 'hann' # type of window
 center = False # see https://librosa.org/doc/0.7.2/_modules/librosa/core/spectrum.html#stft
@@ -155,6 +158,7 @@ def process_write_label(args):
     # Read preprocessed video
     h5_file_path = output_video_dir + mat_file_path
     h5_file_path = os.path.splitext(h5_file_path)[0] + '_upsampled.h5'
+    # h5_file_path = os.path.splitext(h5_file_path)[0] + '_normvideo.h5'
     with h5.File(h5_file_path, 'r') as file:
         video = np.array(file["X"][:])
 
@@ -166,7 +170,8 @@ def process_write_label(args):
 
     # Store data and label in h5_file
     output_h5_file = output_video_dir + output_clean_file_path
-    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '.h5'
+    # output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '.h5'
+    output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '_upsampled.h5'
 
     os.makedirs(os.path.dirname(output_h5_file), exist_ok=True)
 
@@ -188,25 +193,25 @@ def process_write_label(args):
         fy.resize((fy.shape[-1] + label.shape[-1]), axis = len(fy.shape)-1)
         fy[...,-label.shape[-1]:] = label
     
-    # # Compute mean, std
-    # if dataset_type == 'train':
-    #     spectrogram = np.power(abs(speech_tf), 2)
+    # Compute mean, std
+    if dataset_type == 'train':
+        spectrogram = np.power(abs(speech_tf), 2)
 
-    #     # Apply log
-    #     spectrogram = np.log(spectrogram + eps)
+        # Apply log
+        spectrogram = np.log(spectrogram + eps)
 
-    #     # Reduce frames of spectrogram or label
-    #     if label.shape[-1] < spectrogram.shape[-1]:
-    #         spectrogram = spectrogram[...,:label.shape[-1]]
-    #     if label.shape[-1] > spectrogram.shape[-1]:
-    #         label = label[...,:spectrogram.shape[-1]]
+        # Reduce frames of spectrogram or label
+        if label.shape[-1] < spectrogram.shape[-1]:
+            spectrogram = spectrogram[...,:label.shape[-1]]
+        if label.shape[-1] > spectrogram.shape[-1]:
+            label = label[...,:spectrogram.shape[-1]]
 
-    #     # VAR = E[X**2] - E[X]**2
-    #     n_samples = spectrogram.shape[-1]
-    #     channels_sum = np.sum(spectrogram, axis=-1)
-    #     channels_squared_sum = np.sum(spectrogram**2, axis=-1)
+        # VAR = E[X**2] - E[X]**2
+        n_samples = spectrogram.shape[-1]
+        channels_sum = np.sum(spectrogram, axis=-1)
+        channels_squared_sum = np.sum(spectrogram**2, axis=-1)
 
-    #     return n_samples, channels_sum, channels_squared_sum
+        return n_samples, channels_sum, channels_squared_sum
 
 def process_write_noisy_audio(args):
     # Separate args
@@ -241,9 +246,12 @@ def process_write_noisy_audio(args):
             pad_mode=pad_mode,
             pad_at_end=pad_at_end) # shape = (freq_bins, frames)
 
-    # Power spectrogram
+    # # Power spectrogram
+    # Abs spectrogram
     noisy_speech_tf = noisy_speech_tf.numpy()
     noisy_spectrogram = noisy_speech_tf[...,0]**2 + noisy_speech_tf[...,1]**2
+    #TODO: re-run with corrected magnitude spec
+    # noisy_spectrogram = abs(noisy_speech_tf[...,0]) + abs(noisy_speech_tf[...,1])
 
     # Apply log
     noisy_spectrogram = np.log(noisy_spectrogram + eps)
@@ -251,7 +259,8 @@ def process_write_noisy_audio(args):
     # Read preprocessed video corresponding to clean audio
     mat_file_path = clean_file_path.replace('Clean', 'matlab_raw')
     h5_file_path = output_video_dir + mat_file_path
-    h5_file_path = os.path.splitext(h5_file_path)[0] + '_' + labels + '_upsampled.h5'
+    h5_file_path = os.path.splitext(h5_file_path)[0] + '_upsampled.h5'
+    # h5_file_path = os.path.splitext(h5_file_path)[0] + '_normvideo.h5'
     with h5.File(h5_file_path, 'r') as file:
         video = np.array(file["X"][:])
 
@@ -291,6 +300,19 @@ def main():
 
         t1 = time.perf_counter()
 
+        # # VAR = E[X**2] - E[X]**2
+        # n_samples, channels_sum, channels_squared_sum = 0., 0., 0.
+
+        # for i, arg in tqdm(enumerate(args)):
+        #     n_s, c_s, c_s_s = process_write_label(arg)
+        #     n_samples += n_s
+        #     channels_sum += c_s
+        #     channels_squared_sum += c_s_s
+
+        # # Save data on SSD....
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+        #     train_stats = executor.map(process_write_label, args)
+
         # # Process targets
         # for i, arg in tqdm(enumerate(args)):
         #     process_write_label(arg)
@@ -317,7 +339,7 @@ def main():
 
         # Compute mean, std of the train set
         if dataset_type == 'train':
-            # VAR = E[X**2] - E[X]**2
+            # # VAR = E[X**2] - E[X]**2
             n_samples, channels_sum, channels_squared_sum = 0., 0., 0.
 
             t1 = time.perf_counter()
@@ -328,40 +350,46 @@ def main():
             #     channels_sum += c_s
             #     channels_squared_sum += c_s_s
 
-            # # Save data on SSD....
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            #     train_stats = executor.map(process_write_noisy_audio, args)
+            # Save data on SSD....
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+                train_stats = executor.map(process_write_noisy_audio, args)
             
-            # for (n_s, c_s, c_s_s) in train_stats:
-            #     n_samples += n_s
-            #     channels_sum += c_s
-            #     channels_squared_sum += c_s_s 
+            for (n_s, c_s, c_s_s) in train_stats:
+                n_samples += n_s
+                channels_sum += c_s
+                channels_squared_sum += c_s_s 
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')
 
-            # print('Compute mean and std')
-            # #NB: compute the empirical std (!= regular std)
-            # mean = channels_sum / n_samples
-            # std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
+            print('Compute mean and std')
+            #NB: compute the empirical std (!= regular std)
+            mean = channels_sum / n_samples
+            std = np.sqrt((1/(n_samples - 1))*(channels_squared_sum - n_samples * mean**2))
 
-            # # Save statistics
+            # Save statistics
             # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-            # # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
-            # os.makedirs(os.path.dirname(output_dataset_file), exist_ok=True)
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'power_spec_upsampled' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'log_power_spec' + '_statistics.h5')
+            output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Noisy', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'power_spec' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec' + '_statistics.h5')
+            # output_dataset_file = output_video_dir + os.path.join(dataset_name, 'Clean', dataset_name + '_' + 'log_power_spec_upsampled' + '_statistics.h5')
+            
+            os.makedirs(os.path.dirname(output_dataset_file), exist_ok=True)
 
-            # with h5.File(output_dataset_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:
-            #     # Delete datasets if already exists
-            #     if 'X_' + dataset_type + '_mean' in f:
-            #         del f['X_' + dataset_type + '_mean']
-            #         del f['X_' + dataset_type + '_std']
+            with h5.File(output_dataset_file, 'w', rdcc_nbytes=rdcc_nbytes, rdcc_nslots=rdcc_nslots) as f:
+                # Delete datasets if already exists
+                if 'X_' + dataset_type + '_mean' in f:
+                    del f['X_' + dataset_type + '_mean']
+                    del f['X_' + dataset_type + '_std']
 
-            #     f.create_dataset('X_' + dataset_type + '_mean', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
-            #     f.create_dataset('X_' + dataset_type + '_std', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+                f.create_dataset('X_' + dataset_type + '_mean', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
+                f.create_dataset('X_' + dataset_type + '_std', shape=X_chunks, dtype='float32', maxshape=X_chunks, chunks=None, compression=compression)
                 
-            #     f['X_' + dataset_type + '_mean'][:] = mean[..., None] # Add axis to fit chunks shape
-            #     f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
-            #     print('Mean and std saved in HDF5.')
+                f['X_' + dataset_type + '_mean'][:] = mean[..., None] # Add axis to fit chunks shape
+                f['X_' + dataset_type + '_std'][:] = std[..., None] # Add axis to fit chunks shape
+                print('Mean and std saved in HDF5.')
         
         if dataset_type in ['validation', 'test']:
 
@@ -370,8 +398,8 @@ def main():
             # for i, arg in tqdm(enumerate(args)):
             #     process_write_noisy_audio(arg)
 
-            # with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
-            #     executor.map(process_write_noisy_audio, args)
+            with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
+                executor.map(process_write_noisy_audio, args)
 
             t2 = time.perf_counter()
             print(f'Finished in {t2 - t1} seconds')
