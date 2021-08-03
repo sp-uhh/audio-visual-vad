@@ -247,8 +247,7 @@ def process_write_video(args):
     # output_h5_file = os.path.splitext(output_h5_file)[0] + '_.h5'
     # output_h5_file = os.path.splitext(output_h5_file)[0] + '_normvideo.h5'
 
-    if not os.path.exists(os.path.dirname(output_h5_file)):
-        os.makedirs(os.path.dirname(output_h5_file))
+    os.makedirs(os.path.dirname(output_h5_file), exist_ok=True)
 
     # Remove file if already exists
     if os.path.exists(output_h5_file):
@@ -272,8 +271,7 @@ def process_write_video(args):
     output_h5_file = output_video_dir + output_clean_file_path
     output_h5_file = os.path.splitext(output_h5_file)[0] + '_' + labels + '.h5'
 
-    if not os.path.exists(os.path.dirname(output_h5_file)):
-        os.makedirs(os.path.dirname(output_h5_file))
+    os.makedirs(os.path.dirname(output_h5_file), exist_ok=True)
 
     # Remove file if already exists
     if os.path.exists(output_h5_file):
